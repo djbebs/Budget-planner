@@ -514,12 +514,12 @@ const SavingsPlanner = () => {
   };
 
   const handleDeleteIncome = (id) => {
-    const updatedIncomes = state.incomes.filter(income => income.id !== id);
+    const updatedIncomes = state.income.filter(income => income.id !== id);
     dispatch({ 
       type: 'LOAD_DATA', 
       payload: { 
         ...state, 
-        incomes: updatedIncomes 
+        income: updatedIncomes 
       } 
     });
   };
@@ -564,7 +564,7 @@ const SavingsPlanner = () => {
     const headers = [
       'Person', 'Source', 'Frequency', 'Amount(CHF)', 'Start Date', 'End Date'
     ];
-    const rows = state.incomes.map(inc => [
+    const rows = state.income.map(inc => [
       inc.person,
       inc.source,
       inc.frequency,
@@ -810,7 +810,7 @@ const SavingsPlanner = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {state.incomes.map((income) => (
+                  {state.income.map((income) => (
                     <TableRow key={income.id}>
                       <TableCell>{income.person}</TableCell>
                       <TableCell>{income.source}</TableCell>

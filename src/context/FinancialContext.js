@@ -65,6 +65,7 @@ function financialReducer(state, action) {
     case 'LOAD_DATA':
       return {
         ...action.payload,
+        income: action.payload.income || [],
         expenses: action.payload.expenses.map(expense => ({
           ...expense,
           endDate: expense.endDate || getDefaultEndDate(),
