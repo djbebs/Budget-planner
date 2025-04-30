@@ -1,0 +1,531 @@
+// Main function to set up the budget planner
+function setupBudgetPlanner() {
+  Logger.log('Starting setupBudgetPlanner');
+  
+  // Get the active spreadsheet
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss) {
+    Logger.log('Error: Unable to access the active spreadsheet');
+    throw new Error('Unable to access the active spreadsheet');
+  }
+
+  // Remove all existing sheets except 'Feuille 1' to start fresh
+  Logger.log('Removing existing sheets (except Feuille 1)');
+  var allSheets = ss.getSheets();
+  for (var i = 0; i < allSheets.length; i++) {
+    var sheetName = allSheets[i].getName();
+    if (sheetName !== 'Feuille 1') {
+      try {
+        ss.deleteSheet(allSheets[i]);
+        Logger.log('Deleted sheet: ' + sheetName);
+      } catch (e) {
+        Logger.log('Error deleting sheet ' + sheetName + ': ' + e.message);
+      }
+    }
+  }
+
+  // Set up each sheet
+  setupIncomeTracker(ss);
+  setupExpensesTracker(ss);
+  setupYearlyExpenseSummary(ss);
+  setupSavingsAccount(ss);
+
+  Logger.log('setupBudgetPlanner completed successfully');
+}
+
+// Helper function to get or create a sheet
+function getOrCreateSheet(ss, sheetName) {
+  if (!ss) {
+    Logger.log('Spreadsheet object not provided, initializing...');
+    ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) {
+      Logger.log('Error: Unable to access the active spreadsheet');
+      throw new Error('Unable to access the active spreadsheet');
+    }
+  }
+
+  var sheet = ss.getSheetByName(sheetName);
+  if (sheet) {
+    Logger.log('Found existing sheet: ' + sheetName + '. Clearing it.');
+    sheet.clear();
+  } else {
+    Logger.log('Creating new sheet: ' + sheetName);
+    try {
+      sheet = ss.insertSheet(sheetName);
+      Logger.log('Created sheet: ' + sheetName);
+    } catch (e) {
+      Logger.log('Error creating sheet ' + sheetName + ': ' + e.message);
+      throw new Error('Failed to create sheet ' + sheetName + ': ' + e.message);
+    }
+  }
+  return sheet;
+}
+
+// Custom function to get the next due date from a payment schedule (for Irregular payments)
+function GETNEXTDUEDATE(paymentSchedule) {
+  Logger.log('GETNEXTDUEDATE called with: ' + paymentSchedule + ' (type: ' + typeof paymentSchedule + ')');
+  
+  var scheduleStr;
+  if (paymentSchedule instanceof Date) {
+    scheduleStr = Utilities.formatDate(paymentSchedule, Session.getScriptTimeZone(), 'dd.MM.yyyy');
+    Logger.log('Converted Date object to string: ' + scheduleStr);
+  } else if (typeof paymentSchedule === 'string' && paymentSchedule.trim() !== '') {
+    scheduleStr = paymentSchedule;
+  } else {
+    Logger.log('Returning "Invalid schedule" because paymentSchedule is empty or invalid');
+    return 'Invalid schedule';
+  }
+  
+  var currentDate = new Date();
+  
+  var paymentDates = scheduleStr.split(';').map(dateStr => parseDate(dateStr.trim(), false)).filter(date => date !== null);
+  if (paymentDates.length === 0) {
+    Logger.log('Returning "Invalid schedule" because no valid dates were parsed from: ' + scheduleStr);
+    return 'Invalid schedule';
+  }
+  
+  var futureDates = paymentDates.filter(date => date > currentDate);
+  if (futureDates.length === 0) {
+    Logger.log('Returning empty string because all dates are in the past');
+    return ''; // All dates are in the past
+  }
+  
+  futureDates.sort((a, b) => a - b);
+  var nextDate = futureDates[0];
+  
+  var formattedDate = Utilities.formatDate(nextDate, Session.getScriptTimeZone(), 'dd.MM.yyyy');
+  Logger.log('Returning formatted date: ' + formattedDate);
+  return formattedDate;
+}
+
+// Custom function to get the next annual date (for Annual payments)
+function GETNEXTANNUALDATE(dueDateStr) {
+  Logger.log('GETNEXTANNUALDATE called with: ' + dueDateStr);
+  if (!dueDateStr || typeof dueDateStr !== 'string' || dueDateStr.trim() === '') {
+    Logger.log('Returning "Invalid schedule" because dueDateStr is empty or invalid');
+    return 'Invalid schedule';
+  }
+  
+  var dueDate = parseDate(dueDateStr, true);
+  if (!dueDate) {
+    Logger.log('Returning "Invalid schedule" because dueDate could not be parsed');
+    return 'Invalid schedule';
+  }
+  
+  var currentDate = new Date();
+  
+  if (dueDate < currentDate) {
+    dueDate.setFullYear(dueDate.getFullYear() + 1);
+  }
+  
+  var formattedDate = Utilities.formatDate(dueDate, Session.getScriptTimeZone(), 'dd.MM.yyyy');
+  Logger.log('Returning formatted date: ' + formattedDate);
+  return formattedDate;
+}
+
+// Setup for Income Tracker sheet
+function setupIncomeTracker(ss) {
+  if (!ss) {
+    Logger.log('Spreadsheet object not provided, initializing...');
+    ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) {
+      Logger.log('Error: Unable to access the active spreadsheet');
+      throw new Error('Unable to access the active spreadsheet');
+    }
+  }
+
+  Logger.log('Setting up Income Tracker sheet');
+  var sheet = getOrCreateSheet(ss, 'Income Tracker');
+
+  // Set headers
+  var headers = ['Person', 'Source', 'Frequency', 'Amount', 'Start Date', 'End Date', 'Notes'];
+  sheet.getRange('A1:G1').setValues([headers]).setFontWeight('bold');
+  Logger.log('Set headers for Income Tracker sheet');
+
+  // Define income data
+  var incomeData = [
+    ['B', 'Salary', 'Monthly', 8000, '01.01.2025', '31.12.2030', 'Main income'],
+    ['M', 'Salary', 'Monthly', 8000, '01.01.2025', '31.12.2030', 'Main income'],
+    ['Joint', 'Investment Income', '1 off', 1200, '01.01.2025', '', 'Shared investments'],
+    ['B', 'Bonus', '1 off', 3000, '01.06.2025', '', 'Annual bonus'],
+    ['B', 'Bonus', '1 off', 3000, '01.12.2025', '', 'Annual bonus'],
+    ['M', 'Bonus', '1 off', 3000, '01.06.2025', '', 'Annual bonus'],
+    ['M', 'Bonus', '1 off', 3000, '01.12.2025', '', 'Annual bonus']
+  ];
+
+  // Write income data
+  sheet.getRange(2, 1, incomeData.length, headers.length).setValues(incomeData);
+  Logger.log('Wrote income data');
+
+  // Add data validation for Frequency column
+  var frequencyOptions = ['Monthly', '1 off'];
+  var rule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(frequencyOptions, true)
+    .setAllowInvalid(false)
+    .build();
+  sheet.getRange('C2:C' + (incomeData.length + 1)).setDataValidation(rule);
+  Logger.log('Added frequency dropdown to Income Tracker sheet');
+
+  // Apply formatting
+  sheet.getRange('D2:D' + (incomeData.length + 1)).setNumberFormat("#,##0.00 [$CHF]");
+  sheet.getRange('E2:F' + (incomeData.length + 1)).setNumberFormat("DD.MM.YYYY");
+  sheet.getRange('A1:G' + (incomeData.length + 1)).applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY);
+  sheet.autoResizeColumns(1, headers.length);
+  Logger.log('Applied formatting to Income Tracker sheet');
+}
+
+// Setup for Expenses Tracker sheet
+function setupExpensesTracker(ss) {
+  if (!ss) {
+    Logger.log('Spreadsheet object not provided, initializing...');
+    ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) {
+      Logger.log('Error: Unable to access the active spreadsheet');
+      throw new Error('Unable to access the active spreadsheet');
+    }
+  }
+
+  Logger.log('Setting up Expenses Tracker sheet');
+  var sheet = getOrCreateSheet(ss, 'Expenses tracker');
+
+  // Set headers
+  var headers = ['Category', 'Subcategory', 'Description', 'Amount', 'Recurrence', 
+                 'Monthly Equivalent', 'Payment Schedule', 'Next Due Date', 'Notes', 'End Date'];
+  sheet.getRange('A1:J1').setValues([headers]).setFontWeight('bold');
+  Logger.log('Set headers for Expenses Tracker sheet');
+
+  // Define expenses data (Column I and H will use formulas)
+  var expensesData = [
+    ['Tax', 'Canton Valais', 'Tax Installments', 1000, 'Irregular', '', '10.03;10.05;10.07;10.09;10.11', '10.03', '', '31.12.2026'],
+    ['Tax', 'Crans Montana', 'Tax Installments', 600, 'Irregular', '', '10.03;10.05;10.07;10.09;10.11', '10.03', '', '31.12.2026'],
+    ['Tax', 'TV/Radio', 'Annual TV/Radio tax', 400, 'Annual', '', '', '01.05', '', '31.12.2026'],
+    ['Mortgage', 'Repayment', 'Mortgage repayment', 2000, 'Monthly', '', '', '01.01', 'Shared mortgage', '31.12.2027'],
+    ['Mortgage', 'PAX', 'Annual PAX', 500, 'Annual', '', '', '20.03', '', '31.12.2026'],
+    ['Insurance', 'Legal', 'Legal Insurance', 300, 'Annual', '', '', '20.12', '', '31.12.2026'],
+    ['Insurance', 'Home', 'Household Insurance', 200, 'Annual', '', '', '01.01', '', '31.12.2026'],
+    ['Cars', 'Car', 'Car Insurance', 1600, 'Annual', '', '01.01;01.01', '01.01', '', '31.12.2026'],
+    ['Education', 'Tuition', 'School Fees', 11000, 'Irregular', '', '10.03;10.05;10.07;10.08', '01.01', '', '31.12.2025'],
+    ['Utility bills', 'Electricity', 'Monthly Electricity', 100, 'Monthly', '', '', '01.01', '', '31.12.2025']
+  ];
+
+  // Write expenses data
+  sheet.getRange(2, 1, expensesData.length, headers.length).setValues(expensesData);
+  Logger.log('Wrote expenses data');
+
+  // Add data validation for Category column
+  var categoryOptions = ['Tax', 'Mortgage', 'Insurance', 'Cars', 'Education', 'Utility bills', 'Food', 'Transportation', 'Entertainment', 'Health', 'Clothing', 'Miscellaneous'];
+  var categoryRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(categoryOptions, true)
+    .setAllowInvalid(false)
+    .build();
+  sheet.getRange('A2:A' + (expensesData.length + 1)).setDataValidation(categoryRule);
+  Logger.log('Added category dropdown to Expenses Tracker sheet');
+
+  // Add data validation for Recurrence column
+  var recurrenceOptions = ['Monthly', 'Annual', 'One-time', 'Irregular'];
+  var recurrenceRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(recurrenceOptions, true)
+    .setAllowInvalid(false)
+    .build();
+  sheet.getRange('E2:E' + (expensesData.length + 1)).setDataValidation(recurrenceRule);
+  Logger.log('Added recurrence dropdown to Expenses Tracker sheet');
+
+  // Calculate Monthly Equivalent using a formula (Column F)
+  for (var i = 2; i <= expensesData.length + 1; i++) {
+    sheet.getRange('F' + i).setFormula('=IF(E' + i + '="Monthly", D' + i + ', D' + i + '/12)');
+  }
+  Logger.log('Set Monthly Equivalent formulas');
+
+  // Set formula for Column I (Notes)
+  for (var i = 2; i <= expensesData.length + 1; i++) {
+    var row = i;
+    var notesFormula = '=IF(E' + row + '="Irregular", IF(G' + row + '<>"", CONCATENATE(COUNTA(SPLIT(G' + row + ', ";")), " payments of ", TEXT(D' + row + '/COUNTA(SPLIT(G' + row + ', ";")), "0.00"), " CHF"), "Invalid schedule"), "")';
+    sheet.getRange('I' + row).setFormula(notesFormula);
+  }
+  Logger.log('Set Notes formulas for Column I');
+
+  // Clear existing content and formulas in Column H to avoid conflicts
+  sheet.getRange('H2:H' + (expensesData.length + 1)).clear({ contentsOnly: true, skipFilteredRows: false });
+  Logger.log('Cleared existing content in Column H');
+
+  // Set formula for Column H (Next Due Date)
+  for (var i = 2; i <= expensesData.length + 1; i++) {
+    var row = i;
+    var recurrence = sheet.getRange('E' + row).getValue();
+    var paymentSchedule = sheet.getRange('G' + row).getValue();
+    var dueDate = sheet.getRange('H' + row).getValue();
+    var nextDueDateFormula = '=IF(E' + row + '="Irregular", IF(G' + row + '<>"", GETNEXTDUEDATE(G' + row + '), "Invalid schedule"), IF(E' + row + '="Annual", IF(G' + row + '<>"", GETNEXTDUEDATE(G' + row + '), GETNEXTANNUALDATE(H' + row + ')), IF(E' + row + '="Monthly", DATE(YEAR(TODAY()), MONTH(TODAY()) + IF(DAY(TODAY())>1, 1, 0), 1), H' + row + ')))';
+    Logger.log('Row ' + row + ': Recurrence=' + recurrence + ', PaymentSchedule=' + paymentSchedule + ', Initial DueDate=' + dueDate + ', Formula=' + nextDueDateFormula);
+    sheet.getRange('H' + row).setFormula(nextDueDateFormula);
+  }
+  Logger.log('Set Next Due Date formulas for Column H');
+
+  // Apply green background to pre-filled Amount cells (column D)
+  for (var i = 0; i < expensesData.length; i++) {
+    var row = i + 2;
+    sheet.getRange('D' + row).setBackground('lightgreen');
+  }
+
+  // Force recalculation to ensure formulas evaluate correctly
+  SpreadsheetApp.flush();
+  Logger.log('Forced recalculation of the sheet');
+
+  // Apply formatting
+  sheet.getRange('D2:D' + (expensesData.length + 1)).setNumberFormat("#,##0.00 [$CHF]");
+  sheet.getRange('F2:F' + (expensesData.length + 1)).setNumberFormat("#,##0.00 [$CHF]");
+  sheet.getRange('G2:G' + (expensesData.length + 1)).setNumberFormat("DD.MM");
+  sheet.getRange('H2:H' + (expensesData.length + 1)).setNumberFormat("DD.MM.YYYY");
+  sheet.getRange('J2:J' + (expensesData.length + 1)).setNumberFormat("DD.MM.YYYY");
+  sheet.getRange('A1:J' + (expensesData.length + 1)).applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY);
+  sheet.autoResizeColumns(1, headers.length);
+  Logger.log('Applied formatting to Expenses Tracker sheet');
+}
+
+// Setup for Yearly Expense Summary sheet
+function setupYearlyExpenseSummary(ss) {
+  if (!ss) {
+    Logger.log('Spreadsheet object not provided, initializing...');
+    ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) {
+      Logger.log('Error: Unable to access the active spreadsheet');
+      throw new Error('Unable to access the active spreadsheet');
+    }
+  }
+
+  Logger.log('Setting up Yearly Expense Summary sheet');
+  var sheet = getOrCreateSheet(ss, 'Yearly Expense Summary');
+
+  // Set headers
+  var headers = ['Year', 'Total Expenses'];
+  sheet.getRange('A1:B1').setValues([headers]).setFontWeight('bold');
+  Logger.log('Set headers for Yearly Expense Summary sheet');
+
+  // Define years dynamically (2025-2030)
+  var startYear = 2025;
+  var endYear = 2030;
+  var years = [];
+  for (var year = startYear; year <= endYear; year++) {
+    years.push([year]);
+  }
+  sheet.getRange('A2:A' + (endYear - startYear + 2)).setValues(years);
+
+  // Set Total Expenses formula
+  sheet.getRange('B2').setFormula('=SUM(C2:' + String.fromCharCode(66 + getMaxCategoryColumn(ss)) + '2)');
+  sheet.getRange('B2').autoFill(sheet.getRange('B2:B' + (endYear - startYear + 2)), SpreadsheetApp.AutoFillSeries.DEFAULT_SERIES);
+
+  // Set QUERY formula to dynamically pivot by category
+  var expensesSheet = ss.getSheetByName('Expenses tracker');
+  if (!expensesSheet) {
+    Logger.log('Error: Expenses tracker sheet not found');
+    throw new Error('Expenses tracker sheet not found');
+  }
+  var lastRow = expensesSheet.getLastRow();
+  if (lastRow < 2) lastRow = 2;
+
+  var query = '=QUERY({' +
+    '\'Expenses tracker\'!A$2:J$' + lastRow + '}, ' +
+    '"SELECT YEAR(Col8), SUM(Col6 * IF(OR(Col5=\"Monthly\", Col5=\"Annual\"), 12, 1)) ' +
+    'WHERE Col5 IS NOT NULL ' +
+    'GROUP BY YEAR(Col8) ' +
+    'PIVOT Col1", 1)';
+  sheet.getRange('C1').setFormula(query);
+
+  // Apply formatting
+  var maxColumn = getMaxCategoryColumn(ss) + 2; // +2 for Year and Total Expenses columns
+  sheet.getRange('B2:' + String.fromCharCode(65 + maxColumn) + (endYear - startYear + 2)).setNumberFormat("#,##0.00 [$CHF]");
+  sheet.getRange('A1:' + String.fromCharCode(65 + maxColumn) + (endYear - startYear + 2)).applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY);
+  sheet.autoResizeColumns(1, maxColumn + 1);
+  Logger.log('Applied formatting to Yearly Expense Summary sheet');
+}
+
+// Helper function to get the maximum column index based on unique categories
+function getMaxCategoryColumn(ss) {
+  if (!ss) {
+    Logger.log('Spreadsheet object not provided, initializing...');
+    ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) {
+      Logger.log('Error: Unable to access the active spreadsheet');
+      throw new Error('Unable to access the active spreadsheet');
+    }
+  }
+
+  var expensesSheet = ss.getSheetByName('Expenses tracker');
+  if (!expensesSheet) {
+    Logger.log('Error: Expenses tracker sheet not found');
+    return 1; // Default to 1 column if sheet not found
+  }
+  var lastRow = expensesSheet.getLastRow();
+  if (lastRow < 2) lastRow = 2;
+  var categoryRange = expensesSheet.getRange('A2:A' + lastRow).getValues();
+  var uniqueCategories = [...new Set(categoryRange.flat())].filter(category => category !== '');
+  return uniqueCategories.length;
+}
+
+// Setup for Savings Account sheet
+function setupSavingsAccount(ss) {
+  if (!ss) {
+    Logger.log('Spreadsheet object not provided, initializing...');
+    ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) {
+      Logger.log('Error: Unable to access the active spreadsheet');
+      throw new Error('Unable to access the active spreadsheet');
+    }
+  }
+
+  Logger.log('Setting up Savings Account sheet');
+  var sheet = getOrCreateSheet(ss, 'Savings Account');
+  sheet.clear();
+
+  // Set headers
+  var headers = ['Category', 'Purpose', 'Amount', 'Due Date', 'Allocated Savings', 'Months Until Due', 'Monthly Savings Needed'];
+  sheet.getRange('A1:G1').setValues([headers]).setFontWeight('bold');
+  Logger.log('Set headers for Savings Account sheet');
+
+  // Get expenses data from Expenses Tracker
+  var expensesSheet = ss.getSheetByName('Expenses tracker');
+  if (!expensesSheet) {
+    Logger.log('Error: Expenses tracker sheet not found');
+    throw new Error('Expenses tracker sheet not found');
+  }
+  var expensesData = expensesSheet.getRange('A2:J' + expensesSheet.getLastRow()).getValues();
+
+  var currentDate = new Date();
+  var savingsData = [];
+
+  // Generate future payments
+  for (var i = 0; i < expensesData.length; i++) {
+    var category = expensesData[i][0];
+    var purpose = expensesData[i][2]; // Using Description as Purpose
+    var amount = parseFloat(expensesData[i][3]);
+    var recurrence = expensesData[i][4];
+    var paymentSchedule = expensesData[i][6];
+    var dueDateStr = expensesData[i][7];
+    var endDateStr = expensesData[i][9] || '31.12.2030';
+
+    if (!dueDateStr || !amount || isNaN(amount)) continue;
+
+    if (recurrence === 'One-time') {
+      var dueDate = parseDate(dueDateStr, true);
+      if (dueDate && dueDate > currentDate) {
+        savingsData.push([category, purpose, amount, dueDate]);
+      }
+    } else if (recurrence === 'Annual') {
+      var startDate = parseDate(dueDateStr, true);
+      var endDate = parseDate(endDateStr, false);
+      if (!startDate || !endDate) continue;
+      for (var year = Math.max(startDate.getFullYear(), currentDate.getFullYear()); year <= Math.min(endDate.getFullYear(), 2030); year++) {
+        var paymentDate = new Date(year, startDate.getMonth(), startDate.getDate());
+        if (paymentDate > currentDate) {
+          savingsData.push([category, purpose, amount, paymentDate]);
+        }
+      }
+    } else if (recurrence === 'Irregular' && paymentSchedule) {
+      var paymentDates = paymentSchedule.split(';').map(dateStr => parseDate(dateStr.trim(), false));
+      var numPayments = paymentDates.length;
+      var amountPerPayment = amount / numPayments;
+      for (var j = 0; j < paymentDates.length; j++) {
+        if (paymentDates[j] && paymentDates[j] > currentDate && paymentDates[j].getFullYear() <= 2030) {
+          savingsData.push([category, purpose, amountPerPayment, paymentDates[j]]);
+        }
+      }
+    }
+  }
+
+  // Sort by due date
+  savingsData.sort((a, b) => a[3] - b[3]);
+
+  // Write data
+  if (savingsData.length > 0) {
+    var dataToWrite = savingsData.map(row => [
+      row[0], // Category
+      row[1], // Purpose
+      row[2], // Amount
+      Utilities.formatDate(row[3], Session.getScriptTimeZone(), 'dd.MM.yyyy') // Due Date
+    ]);
+    sheet.getRange(2, 1, savingsData.length, 4).setValues(dataToWrite);
+  }
+
+  // Add current savings and total future payments
+  sheet.getRange('I2').setValue('Savings as of today (indicate today\'s date DD MMM YYYY)');
+  sheet.getRange('J2').setValue(22000).setBackground('lightgreen').setNumberFormat('#,##0.00 [$CHF]');
+  sheet.getRange('I3').setValue('Total Future Payments');
+  sheet.getRange('J3').setFormula('=SUM(C2:C)');
+
+  // Add formulas for Allocated Savings, Months Until Due, and Monthly Savings Needed
+  var lastRow = savingsData.length + 1;
+  for (var row = 2; row <= lastRow; row++) {
+    // Allocated Savings: (Payment Amount / Total Future Payments) * Current Savings
+    sheet.getRange('E' + row).setFormula('=IFERROR((C' + row + '/$J$3)*$J$2, 0)');
+    // Months Until Due: Difference between Due Date and today in months
+    sheet.getRange('F' + row).setFormula('=IF(D' + row + '<=TODAY(), 0, DATEDIF(TODAY(), D' + row + ', "M"))');
+    // Monthly Savings Needed: (Amount - Allocated Savings) / Months Until Due
+    sheet.getRange('G' + row).setFormula('=IF(F' + row + '=0, 0, MAX(0, (C' + row + '-E' + row + ')/F' + row + '))');
+  }
+
+  // Apply formatting
+  sheet.getRange('C2:C' + lastRow).setNumberFormat('#,##0.00 [$CHF]');
+  sheet.getRange('D2:D' + lastRow).setNumberFormat('DD.MM.YYYY');
+  sheet.getRange('E2:G' + lastRow).setNumberFormat('#,##0.00 [$CHF]');
+  sheet.getRange('A1:G' + lastRow).applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY);
+  sheet.autoResizeColumns(1, 7);
+  Logger.log('Applied formatting to Savings Account sheet');
+}
+
+// Helper function to parse date strings in DD.MM format
+function parseDate(dateStr, isAnnual) {
+  Logger.log('parseDate called with: ' + dateStr + ', isAnnual: ' + isAnnual);
+  if (!dateStr || typeof dateStr !== 'string') {
+    Logger.log('parseDate returning null: dateStr is invalid');
+    return null;
+  }
+  var parts = dateStr.split('.');
+  
+  // Handle DD.MM.YYYY format (for End Date and other sheets)
+  if (parts.length === 3) {
+    var day = parseInt(parts[0], 10);
+    var month = parseInt(parts[1], 10) - 1; // Month is 0-based in JavaScript
+    var year = parseInt(parts[2], 10);
+    var date = new Date(year, month, day);
+    if (isNaN(date.getTime())) {
+      Logger.log('parseDate returning null: invalid date (DD.MM.YYYY)');
+      return null;
+    }
+    Logger.log('parseDate returning: ' + date + ' (DD.MM.YYYY format)');
+    return date;
+  }
+  
+  // Handle DD.MM format
+  if (parts.length !== 2) {
+    Logger.log('parseDate returning null: dateStr does not have 2 parts (expected DD.MM)');
+    return null;
+  }
+  var day = parseInt(parts[0], 10);
+  var month = parseInt(parts[1], 10) - 1; // Month is 0-based in JavaScript
+  
+  var currentDate = new Date();
+  var currentYear = currentDate.getFullYear();
+  
+  if (isAnnual) {
+    var dateInCurrentYear = new Date(currentYear, month, day);
+    if (dateInCurrentYear < currentDate) {
+      var year = currentYear + 1;
+    } else {
+      var year = currentYear;
+    }
+  } else {
+    var dateInCurrentYear = new Date(currentYear, month, day);
+    if (dateInCurrentYear < currentDate) {
+      var year = currentYear + 1;
+    } else {
+      var year = currentYear;
+    }
+  }
+  
+  var date = new Date(year, month, day);
+  if (isNaN(date.getTime())) {
+    Logger.log('parseDate returning null: invalid date');
+    return null;
+  }
+  Logger.log('parseDate returning: ' + date + ' (year assigned: ' + year + ')');
+  return date;
+}
