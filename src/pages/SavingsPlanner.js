@@ -45,6 +45,17 @@ const SavingsPlanner = () => {
   });
   const [monthlyCalculation, setMonthlyCalculation] = useState([]);
   const [showMonthlyDetails, setShowMonthlyDetails] = useState(false);
+  const [newIncome, setNewIncome] = useState({
+    person: '',
+    source: '',
+    frequency: '',
+    amount: '',
+    startDate: '',
+    endDate: '',
+  });
+  const [openIncomeDialog, setOpenIncomeDialog] = useState(false);
+  const [editingIncome, setEditingIncome] = useState(null);
+  const [incomeErrors, setIncomeErrors] = useState({});
 
   const categories = [
     'Tax',
@@ -62,7 +73,14 @@ const SavingsPlanner = () => {
     'Irregular'
   ];
 
+  const frequencyTypes = [
+    'Monthly',
+    '1 off',
+    'Annual'
+  ];
+
   const fileInputRef = useRef(null);
+  const incomeFileInputRef = useRef(null);
 
   const calculateMonthlyEquivalent = (expense) => {
     const amount = parseFloat(expense.amount);
@@ -450,6 +468,117 @@ const SavingsPlanner = () => {
     saveAs(blob, 'expenses_export.csv');
   };
 
+  const validateIncome = (income) => {
+    const newErrors = {};
+    if (!income.person) newErrors.person = 'Person is required';
+    if (!income.source) newErrors.source = 'Source is required';
+    if (!income.amount) newErrors.amount = 'Amount is required';
+    if (!income.frequency) newErrors.frequency = 'Frequency is required';
+    if (!income.startDate) newErrors.startDate = 'Start Date is required';
+    setIncomeErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleAddIncome = () => {
+    if (!validateIncome(newIncome)) return;
+
+    const income = {
+      ...newIncome,
+      id: Date.now().toString(),
+      amount: parseFloat(newIncome.amount),
+    };
+
+    dispatch({ type: 'ADD_INCOME', payload: income });
+    setNewIncome({
+      person: '',
+      source: '',
+      frequency: '',
+      amount: '',
+      startDate: '',
+      endDate: '',
+    });
+    setOpenIncomeDialog(false);
+  };
+
+  const handleEditIncome = (income) => {
+    if (!validateIncome(income)) return;
+
+    const updatedIncome = {
+      ...income,
+      amount: parseFloat(income.amount),
+    };
+
+    dispatch({ type: 'UPDATE_INCOME', payload: updatedIncome });
+    setEditingIncome(null);
+    setOpenIncomeDialog(false);
+  };
+
+  const handleDeleteIncome = (id) => {
+    const updatedIncomes = state.incomes.filter(income => income.id !== id);
+    dispatch({ 
+      type: 'LOAD_DATA', 
+      payload: { 
+        ...state, 
+        incomes: updatedIncomes 
+      } 
+    });
+  };
+
+  const handleIncomeFileUpload = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target.result;
+        const rows = text.split('\n');
+        const headers = rows[0].split(',').map(header => header.trim());
+        
+        const newIncomes = rows.slice(1)
+          .filter(row => row.trim()) // Skip empty rows
+          .map(row => {
+            const values = row.split(',').map(value => value.trim());
+            const income = {
+              id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+              person: values[headers.indexOf('Person')] || '',
+              source: values[headers.indexOf('Source')] || '',
+              frequency: values[headers.indexOf('Frequency')] || '',
+              amount: parseFloat(values[headers.indexOf('Amount(CHF)')]) || 0,
+              startDate: values[headers.indexOf('Start Date')] || '',
+              endDate: values[headers.indexOf('End Date')] || ''
+            };
+            return income;
+          });
+
+        // Add all new incomes to the state
+        newIncomes.forEach(income => {
+          dispatch({ type: 'ADD_INCOME', payload: income });
+        });
+      };
+      reader.readAsText(file);
+    }
+    // Reset file input
+    event.target.value = '';
+  };
+
+  const handleExportIncomeCSV = () => {
+    const headers = [
+      'Person', 'Source', 'Frequency', 'Amount(CHF)', 'Start Date', 'End Date'
+    ];
+    const rows = state.incomes.map(inc => [
+      inc.person,
+      inc.source,
+      inc.frequency,
+      inc.amount,
+      inc.startDate,
+      inc.endDate
+    ]);
+    const csvContent = [headers, ...rows]
+      .map(row => row.map(val => `"${val ?? ''}"`).join(','))
+      .join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    saveAs(blob, 'income_export.csv');
+  };
+
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       {/* Monthly Savings Needed at the top */}
@@ -622,6 +751,98 @@ const SavingsPlanner = () => {
             </TableContainer>
           </Paper>
         </Grid>
+
+        {/* Income Table Section */}
+        <Grid item xs={12}>
+          <Paper sx={{ p: 3 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <Typography variant="h6">Income</Typography>
+              <Grid container spacing={2} alignItems="center">
+                <Grid item xs={12} md={6}>
+                </Grid>
+                <Grid item xs={12} md={6} sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
+                  <input
+                    type="file"
+                    accept=".csv"
+                    style={{ display: 'none' }}
+                    ref={incomeFileInputRef}
+                    onChange={handleIncomeFileUpload}
+                  />
+                  <Button
+                    variant="contained"
+                    startIcon={<UploadIcon />}
+                    onClick={() => incomeFileInputRef.current.click()}
+                  >
+                    Import CSV
+                  </Button>
+                  <Button
+                    variant="contained"
+                    onClick={handleExportIncomeCSV}
+                    sx={{ ml: 1 }}
+                  >
+                    Export CSV
+                  </Button>
+                  <Button
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    onClick={() => {
+                      setEditingIncome(null);
+                      setIncomeErrors({});
+                      setOpenIncomeDialog(true);
+                    }}
+                  >
+                    Add Income
+                  </Button>
+                </Grid>
+              </Grid>
+            </div>
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Person</TableCell>
+                    <TableCell>Source</TableCell>
+                    <TableCell>Frequency</TableCell>
+                    <TableCell>Amount (CHF)</TableCell>
+                    <TableCell>Start Date</TableCell>
+                    <TableCell>End Date</TableCell>
+                    <TableCell>Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {state.incomes.map((income) => (
+                    <TableRow key={income.id}>
+                      <TableCell>{income.person}</TableCell>
+                      <TableCell>{income.source}</TableCell>
+                      <TableCell>{income.frequency}</TableCell>
+                      <TableCell>{income.amount.toLocaleString('de-CH', {
+                        style: 'currency',
+                        currency: 'CHF'
+                      })}</TableCell>
+                      <TableCell>{income.startDate}</TableCell>
+                      <TableCell>{income.endDate}</TableCell>
+                      <TableCell>
+                        <IconButton
+                          onClick={() => {
+                            setEditingIncome(income);
+                            setNewIncome(income);
+                            setIncomeErrors({});
+                            setOpenIncomeDialog(true);
+                          }}
+                        >
+                          <EditIcon />
+                        </IconButton>
+                        <IconButton onClick={() => handleDeleteIncome(income.id)}>
+                          <DeleteIcon />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
+        </Grid>
       </Grid>
 
       {/* Add/Edit Expense Dialog */}
@@ -728,6 +949,98 @@ const SavingsPlanner = () => {
             variant="contained"
           >
             {editingExpense ? 'Save Changes' : 'Add Expense'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Add/Edit Income Dialog */}
+      <Dialog 
+        open={openIncomeDialog} 
+        onClose={() => setOpenIncomeDialog(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          {editingIncome ? 'Edit Income' : 'Add New Income'}
+        </DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Person *"
+                value={newIncome.person}
+                onChange={(e) => setNewIncome({ ...newIncome, person: e.target.value })}
+                error={!!incomeErrors.person}
+                helperText={incomeErrors.person}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Source *"
+                value={newIncome.source}
+                onChange={(e) => setNewIncome({ ...newIncome, source: e.target.value })}
+                error={!!incomeErrors.source}
+                helperText={incomeErrors.source}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth error={!!incomeErrors.frequency}>
+                <InputLabel>Frequency *</InputLabel>
+                <Select
+                  value={newIncome.frequency}
+                  label="Frequency *"
+                  onChange={(e) => setNewIncome({ ...newIncome, frequency: e.target.value })}
+                >
+                  {frequencyTypes.map((type) => (
+                    <MenuItem key={type} value={type}>
+                      {type}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {incomeErrors.frequency && <FormHelperText>{incomeErrors.frequency}</FormHelperText>}
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Amount (CHF) *"
+                type="number"
+                value={newIncome.amount}
+                onChange={(e) => setNewIncome({ ...newIncome, amount: e.target.value })}
+                error={!!incomeErrors.amount}
+                helperText={incomeErrors.amount}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Start Date *"
+                value={newIncome.startDate}
+                onChange={(e) => setNewIncome({ ...newIncome, startDate: e.target.value })}
+                error={!!incomeErrors.startDate}
+                helperText={incomeErrors.startDate || "Format: DD.MM.YYYY"}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="End Date"
+                value={newIncome.endDate}
+                onChange={(e) => setNewIncome({ ...newIncome, endDate: e.target.value })}
+                helperText="Format: DD.MM.YYYY (optional)"
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenIncomeDialog(false)}>Cancel</Button>
+          <Button
+            onClick={() => editingIncome ? handleEditIncome(newIncome) : handleAddIncome()}
+            variant="contained"
+          >
+            {editingIncome ? 'Save Changes' : 'Add Income'}
           </Button>
         </DialogActions>
       </Dialog>
