@@ -26,6 +26,7 @@ import {
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Upload as UploadIcon, ExpandMore, ExpandLess } from '@mui/icons-material';
 import { useFinancial } from '../context/FinancialContext';
 import SavingsChart from '../components/SavingsChart';
+import FinancialDashboard from '../components/FinancialDashboard';
 import { saveAs } from 'file-saver';
 
 const SavingsPlanner = () => {
@@ -606,6 +607,14 @@ const SavingsPlanner = () => {
               monthlyCalculation={monthlyCalculation}
             />
           </Paper>
+        </Grid>
+
+        {/* Financial Dashboard Section */}
+        <Grid item xs={12}>
+          <FinancialDashboard 
+            income={state.income}
+            expenses={state.expenses}
+          />
         </Grid>
 
         {/* Collapsible Monthly Calculation Table */}
