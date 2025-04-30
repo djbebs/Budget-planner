@@ -1,6 +1,6 @@
 Category,Subcategory,Description,Amount,Recurrence,Payment Schedule,End Date
 Tax,Canton Valais,Tax Installments,1000,Irregular,10.03;10.05;10.07;10.09;10.11,31/12/2030
-Tax,Crans Montana,Tax Installments,900,Irregular,10.03;10.05;10.07;10.09;10.11,31/12/2030
+Tax,city,Tax Installments,900,Irregular,10.03;10.05;10.07;10.09;10.11,31/12/2030
 Tax,TV/Radio,Annual TV/Radio tax,800,Annual,1.05,31/12/2030
 Mortgage,Repayment,Mortgage repayment,2000,Monthly,,31/12/2030
 Mortgage,PAX,Annual PAX,700,Annual,20.03,31/12/2030
