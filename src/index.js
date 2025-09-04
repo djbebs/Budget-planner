@@ -19,6 +19,17 @@ const theme = createTheme({
       default: '#f5f5f5',
     },
   },
+  typography: {
+    fontFamily: [
+      'Roboto',
+      '-apple-system',
+      'BlinkMacSystemFont',
+      '"Segoe UI"',
+      'Arial',
+      'sans-serif'
+    ].join(','),
+    fontSize: 14,
+  },
 });
 
 // Root component with providers and error boundary
@@ -49,8 +60,13 @@ try {
 } catch (error) {
   console.error('Failed to render application:', error);
   root.render(
-    <div style={{ padding: '20px', color: 'red' }}>
-      <h1>Application Failed to Load</h1>
+    <div style={{ 
+      padding: '20px', 
+      color: 'red', 
+      fontFamily: "'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif",
+      fontSize: '1rem'
+    }}>
+      <h1 style={{ fontSize: '1.5rem', fontWeight: 500 }}>Application Failed to Load</h1>
       <p>Please try refreshing the page. If the problem persists, contact support.</p>
     </div>
   );

@@ -1,0 +1,31 @@
+// Simple Check: Look for Global Timespan Algorithm Logs
+
+console.log('🧪 Testing if Global Timespan Algorithm is Active');
+console.log('');
+console.log('🔍 To verify the new algorithm is working:');
+console.log('');
+console.log('1. Open your browser console (F12)');
+console.log('2. Look for logs starting with "[GLOBAL TIMESPAN]"');
+console.log('3. You should see:');
+console.log('   - "Starting calculation with minimal post-payment savings"');
+console.log('   - "Cache cleared - Global timespan algorithm..."');
+console.log('   - "Created X periods:" with period descriptions');
+console.log('   - "Maintenance - projected: X, minimal required: Y"');
+console.log('   - Final savings rates of CHF 5-15/month after last payment');
+console.log('');
+console.log('4. The chart should show:');
+console.log('   - Final balance around CHF 25,000-35,000 (not CHF 120,000+)');
+console.log('   - Flat/minimal growth after last one-off payment');
+console.log('');
+console.log('If you still see CHF 120,000+ final balance, the old algorithm is running.');
+console.log('');
+console.log('💡 Try:');
+console.log('   - Hard refresh (Ctrl+F5)');
+console.log('   - Clear browser cache');
+console.log('   - Change a parameter slightly to force recalculation');
+console.log('');
+console.log('🚀 Expected Results:');
+console.log('   - Target never violated ✅');
+console.log('   - Constant savings within periods ✅');
+console.log('   - Minimal growth after last payment ✅');
+console.log('   - Final balance: CHF 25,000-35,000 (not CHF 120,000+)'); 

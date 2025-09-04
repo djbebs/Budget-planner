@@ -13,13 +13,16 @@
     "react-chartjs-2": "^5.2.0",
     "react-dom": "^18.2.0",
     "react-scripts": "5.0.1",
+    "recharts": "^2.15.3",
     "web-vitals": "^3.5.1"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
     "nodemon": "^3.0.3",
-    "rimraf": "^5.0.5"
+    "rimraf": "^5.0.5",
+    "source-map-explorer": "^2.5.3",
+    "webpack-bundle-analyzer": "^4.10.1"
   },
   "scripts": {
     "clean": "rimraf node_modules/.cache build",
@@ -27,8 +30,11 @@
     "dev": "cross-env PORT=3000 HOST=localhost BROWSER=none WATCHPACK_POLLING=true react-scripts start",
     "start": "npm run dev",
     "build": "react-scripts build",
+    "build:analyze": "npm run build && npx source-map-explorer 'build/static/js/*.js'",
+    "bundle:analyze": "npm run build && npx webpack-bundle-analyzer build/static/js/*.js",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "optimize": "npm run clean && npm run build"
   },
   "eslintConfig": {
     "extends": [

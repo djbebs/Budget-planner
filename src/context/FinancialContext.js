@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useMemo } from 'react';
 
 const FinancialContext = createContext();
 
@@ -13,8 +13,23 @@ const initialState = {
   savings: {
     currentAmount: 0,
     date: new Date().toISOString().split('T')[0],
+    targetAmount: 0, // Target amount for balance adjustments
+    adjustmentCycle: 1, // Adjustment cycle in years (default: 1 year)
   },
   projectedSavings: [],
+};
+
+// Debounce function for localStorage saves
+const debounce = (func, wait) => {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
 };
 
 function financialReducer(state, action) {
@@ -57,10 +72,23 @@ function financialReducer(state, action) {
         ...state,
         savings: action.payload,
       };
+    case 'UPDATE_SAVINGS_SETTINGS':
+      return {
+        ...state,
+        savings: {
+          ...state.savings,
+          ...action.payload,
+        },
+      };
     case 'UPDATE_PROJECTED_SAVINGS':
       return {
         ...state,
         projectedSavings: action.payload,
+      };
+    case 'CLEAR_EXPENSES':
+      return {
+        ...state,
+        expenses: [],
       };
     case 'LOAD_DATA':
       return {
@@ -71,6 +99,10 @@ function financialReducer(state, action) {
           endDate: expense.endDate || getDefaultEndDate(),
         })),
         projectedSavings: action.payload.projectedSavings || [],
+        savings: {
+          ...initialState.savings,
+          ...action.payload.savings,
+        },
       };
     default:
       return state;
@@ -79,6 +111,18 @@ function financialReducer(state, action) {
 
 export function FinancialProvider({ children }) {
   const [state, dispatch] = useReducer(financialReducer, initialState);
+
+  // Memoized save function with debouncing
+  const saveToLocalStorage = useMemo(
+    () => debounce((data) => {
+      try {
+        localStorage.setItem('financialData', JSON.stringify(data));
+      } catch (error) {
+        console.error('Error saving data to localStorage:', error);
+      }
+    }, 500), // 500ms debounce
+    []
+  );
 
   // Load data from localStorage on initial render
   useEffect(() => {
@@ -93,17 +137,19 @@ export function FinancialProvider({ children }) {
     }
   }, []);
 
-  // Save data to localStorage whenever state changes
+  // Save data to localStorage whenever state changes (debounced)
   useEffect(() => {
-    try {
-      localStorage.setItem('financialData', JSON.stringify(state));
-    } catch (error) {
-      console.error('Error saving data to localStorage:', error);
-    }
-  }, [state]);
+    saveToLocalStorage(state);
+  }, [state, saveToLocalStorage]);
+
+  // Memoized context value to prevent unnecessary re-renders
+  const contextValue = useMemo(() => ({
+    state,
+    dispatch
+  }), [state]);
 
   return (
-    <FinancialContext.Provider value={{ state, dispatch }}>
+    <FinancialContext.Provider value={contextValue}>
       {children}
     </FinancialContext.Provider>
   );

@@ -33,8 +33,6 @@ ChartJS.register(
   Legend
 );
 
-
-
 const formatCHF = (value) => {
   return `CHF ${value.toLocaleString('de-CH', { 
     minimumFractionDigits: 2, 
@@ -42,11 +40,12 @@ const formatCHF = (value) => {
   })}`;
 };
 
-
-
-
-
-const SavingsChart = ({ monthlyCalculation }) => {
+const SeparatedSavingsChart = ({ 
+  regularSavingsNeeded, 
+  oneOffTimeline, 
+  currentAmount, 
+  targetAmount 
+}) => {
   const theme = useTheme();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('sm'));
   const isMediumScreen = useMediaQuery(theme.breakpoints.between('sm', 'md'));
@@ -59,10 +58,8 @@ const SavingsChart = ({ monthlyCalculation }) => {
   const tooltipTitleFontSize = isSmallScreen ? 22 : isMediumScreen ? 26 : 30;
   const legendFontSize = isSmallScreen ? 20 : isMediumScreen ? 24 : 28;
 
-  // Add state for the time span selection
-  const [timeSpan, setTimeSpan] = useState(5); // Default to 5 years
-  const [filteredData, setFilteredData] = useState([]);
-  const [showMonthlySavings] = useState(false); // Set default to false to hide monthly savings
+  const [timeSpan, setTimeSpan] = useState(5);
+  const [projectedData, setProjectedData] = useState([]);
 
   // Cleanup chart on unmount
   useEffect(() => {
@@ -73,106 +70,131 @@ const SavingsChart = ({ monthlyCalculation }) => {
     };
   }, []);
 
-  // Filter data based on selected time span and process the data
+  // Generate projection data
   useEffect(() => {
-    if (!monthlyCalculation || monthlyCalculation.length === 0) {
-      setFilteredData([]);
+    if (!regularSavingsNeeded && !oneOffTimeline.length) {
+      setProjectedData([]);
       return;
     }
 
-    // Use the first data point as the start date
-    const firstItem = monthlyCalculation[0];
-    if (!firstItem || !firstItem.month) {
-      setFilteredData([]);
-      return;
-    }
-
-    const dateParts = firstItem.month.split(' ');
-    const startMonthIdx = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].indexOf(dateParts[0]);
-    const startYear = parseInt(dateParts[1]);
-    const startDate = new Date(startYear, startMonthIdx, 1);
-    const maxDate = new Date(startYear + timeSpan, startMonthIdx, 1);
-
-    const filtered = monthlyCalculation.filter(item => {
-      if (!item || !item.month) return false;
+    const today = new Date();
+    const startDate = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+    const endDate = new Date(startDate.getFullYear() + timeSpan, startDate.getMonth(), 1);
+    
+    const months = [];
+    const currentDate = new Date(startDate);
+    let balance = parseFloat(currentAmount) || 0;
+    const target = parseFloat(targetAmount) || 0;
+    
+    // Track which one-off payments have been made
+    const remainingOneOffs = [...oneOffTimeline];
+    
+    while (currentDate < endDate) {
+      const monthName = currentDate.toLocaleString('default', { month: 'short', year: 'numeric' });
+      const monthKey = currentDate.toISOString().slice(0, 7);
       
-      // Parse the date from the month string (format: "Jan 2025")
-      const dateParts = item.month.split(' ');
-      const monthIdx = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].indexOf(dateParts[0]);
-      const year = parseInt(dateParts[1]);
-      const itemDate = new Date(year, monthIdx, 1);
-      return itemDate >= startDate && itemDate < maxDate;
-    });
+      // Calculate current monthly savings (regular + remaining one-off contributions)
+      const currentOneOffContribution = remainingOneOffs.reduce((sum, oneOff) => {
+        return sum + oneOff.monthlyContribution;
+      }, 0);
+      
+      const currentMonthlySavings = regularSavingsNeeded + currentOneOffContribution;
+      
+      // Check for one-off payments this month
+      const paymentsThisMonth = remainingOneOffs.filter(oneOff => {
+        const oneOffDate = new Date(oneOff.paymentDate);
+        return oneOffDate.getFullYear() === currentDate.getFullYear() && 
+               oneOffDate.getMonth() === currentDate.getMonth();
+      });
+      
+      const totalExpensesThisMonth = paymentsThisMonth.reduce((sum, payment) => sum + payment.expenseAmount, 0);
+      const expenseDescriptions = paymentsThisMonth.map(p => p.description);
+      
+      // Calculate balances
+      const startBalance = balance;
+      balance += currentMonthlySavings;
+      balance -= totalExpensesThisMonth;
+      
+      // Remove paid one-offs from future calculations
+      if (paymentsThisMonth.length > 0) {
+        remainingOneOffs.splice(0, remainingOneOffs.length, 
+          ...remainingOneOffs.filter(oneOff => {
+            const oneOffDate = new Date(oneOff.paymentDate);
+            return !(oneOffDate.getFullYear() === currentDate.getFullYear() && 
+                    oneOffDate.getMonth() === currentDate.getMonth());
+          })
+        );
+      }
+      
+      // Emergency protection: ensure we never go below target
+      let adjustedSavings = currentMonthlySavings;
+      if (balance < target) {
+        const deficit = target - balance + 100; // Small safety margin
+        adjustedSavings = currentMonthlySavings + deficit;
+        balance = startBalance + adjustedSavings - totalExpensesThisMonth;
+      }
+      
+      const isOneOffPaymentMonth = paymentsThisMonth.length > 0;
+      const isAdjustmentMonth = months.length > 0 && months[months.length - 1]?.hasSignificantExpense;
+      
+      months.push({
+        month: monthName,
+        date: monthName,
+        monthKey,
+        startBalance: startBalance,
+        monthlySaving: adjustedSavings,
+        regularSaving: regularSavingsNeeded,
+        oneOffContribution: currentOneOffContribution,
+        expenses: expenseDescriptions,
+        totalExpenses: totalExpensesThisMonth,
+        endBalance: balance,
+        remainingOneOffs: remainingOneOffs.length,
+        isAdjustingToInitial: isAdjustmentMonth,
+        hasSignificantExpense: isOneOffPaymentMonth,
+        belowTargetBalance: balance < target,
+        monthIndex: months.length
+      });
+      
+      // Move to next month
+      currentDate.setMonth(currentDate.getMonth() + 1);
+      
+      // Stop if balance goes negative (should not happen with proper calculation)
+      if (balance < 0) {
+        break;
+      }
+    }
+    
+    setProjectedData(months);
+  }, [regularSavingsNeeded, oneOffTimeline, currentAmount, targetAmount, timeSpan]);
 
-    setFilteredData(filtered);
-  }, [monthlyCalculation, timeSpan]);
-
-  if (!monthlyCalculation || monthlyCalculation.length === 0) {
+  if (!regularSavingsNeeded && !oneOffTimeline.length) {
     return (
       <div style={{ fontSize: '1.6rem', padding: '20px', textAlign: 'center' }}>
-        {parseFloat(localStorage.getItem('currentSavings') || '0') === 0 ? 
-          'No projection available with a starting balance of 0' : 
-          'No data available'}
+        No projection available. Add some expenses to see the projection.
       </div>
     );
   }
 
-  // Use filtered data for chart
-  const labels = filteredData.map(row => row?.month || '');
-  const dataPoints = filteredData.map(row => row?.endBalance || 0);
-  const monthlySavingsPoints = filteredData.map(row => row?.monthlySaving || 0);
+  // Use projected data for chart
+  const labels = projectedData.map(row => row?.month || '');
+  const dataPoints = projectedData.map(row => row?.endBalance || 0);
+  const regularSavingsPoints = projectedData.map(row => row?.regularSaving || 0);
+  const oneOffSavingsPoints = projectedData.map(row => row?.oneOffContribution || 0);
 
   // Helper function to get point color based on data
   const getPointColor = (idx) => {
-    if (idx >= filteredData.length || !filteredData[idx]) return '#ff9800'; // Default orange
+    if (idx >= projectedData.length || !projectedData[idx]) return '#ff9800'; // Default orange
     
-    const row = filteredData[idx];
+    const row = projectedData[idx];
     
     // Purple for adjustment points (start of adjustment cycles towards target balance)
     if (row.isAdjustingToInitial === true) {
-      console.log(`Point ${idx} (${row.month}): Purple - Adjustment to initial balance`);
       return '#673ab7';
     }
     
     // Red for months with one-off expenses
     if (row.hasSignificantExpense === true) {
-      console.log(`Point ${idx} (${row.month}): Red - One-off expense`);
       return '#f44336';
-    }
-    
-    // Orange for months with regular expenses (annual/irregular)
-    if (row.hasRegularExpense === true) {
-      console.log(`Point ${idx} (${row.month}): Orange - Regular expense`);
-      return '#ff9800';
-    }
-    
-    // Blue for months with reduced savings to gradually reach target (adjustment cycles)
-    if (row.isInAdjustmentCycle && row.isReducedSavings && !row.isAdjustingToInitial && !row.hasSignificantExpense) {
-      console.log(`Point ${idx} (${row.month}): Blue - Adjustment cycle with reduced savings`);
-      return '#2196f3';
-    }
-    
-    // Debug: Log all the flags for adjustment cycle months
-    if (row.isInAdjustmentCycle) {
-      console.log(`Point ${idx} (${row.month}): Adjustment cycle flags:`, {
-        isInAdjustmentCycle: row.isInAdjustmentCycle,
-        isReducedSavings: row.isReducedSavings,
-        isAdjustingToInitial: row.isAdjustingToInitial,
-        hasSignificantExpense: row.hasSignificantExpense,
-        monthlySaving: row.monthlySaving
-      });
-    }
-    
-    // Alternative blue detection: significant savings reduction
-    if (idx > 0 && filteredData[idx - 1]) {
-      const prevRow = filteredData[idx - 1];
-      const savingsReduced = (row.monthlySaving || 0) < (prevRow.monthlySaving || 0);
-      const significantReduction = Math.abs((row.monthlySaving || 0) - (prevRow.monthlySaving || 0)) > 50; // More than 50 CHF reduction
-      
-      if (savingsReduced && significantReduction && !row.isAdjustingToInitial && !row.hasSignificantExpense) {
-        console.log(`Point ${idx} (${row.month}): Blue - Reduced savings (${(prevRow.monthlySaving || 0).toFixed(2)} -> ${(row.monthlySaving || 0).toFixed(2)})`);
-        return '#2196f3';
-      }
     }
     
     // Default orange
@@ -181,9 +203,9 @@ const SavingsChart = ({ monthlyCalculation }) => {
 
   // Helper function to get point radius based on data
   const getPointRadius = (idx) => {
-    if (idx >= filteredData.length || !filteredData[idx]) return 6; // Default radius
+    if (idx >= projectedData.length || !projectedData[idx]) return 6; // Default radius
     
-    const row = filteredData[idx];
+    const row = projectedData[idx];
     
     // Larger radius for special points
     if (row.isAdjustingToInitial === true) {
@@ -194,50 +216,8 @@ const SavingsChart = ({ monthlyCalculation }) => {
       return 10; // Red one-off expense points
     }
     
-    if (row.hasRegularExpense === true) {
-      return 8; // Orange regular expense points
-    }
-    
-    if (idx > 0 && filteredData[idx - 1]) {
-      const prevRow = filteredData[idx - 1];
-      const savingsReduced = (row.monthlySaving || 0) < (prevRow.monthlySaving || 0);
-      const significantReduction = Math.abs((row.monthlySaving || 0) - (prevRow.monthlySaving || 0)) > 50;
-      
-      if (savingsReduced && significantReduction && !row.isAdjustingToInitial && !row.hasSignificantExpense) {
-        return 8; // Blue reduced savings points
-      }
-    }
-    
     return 6; // Default radius
   };
-
-  // Log data for debugging
-  console.log("Filtered data for chart:", filteredData.map((row, idx) => ({ 
-    index: idx,
-    month: row?.month || 'N/A', 
-    isAdjusting: row?.isAdjustingToInitial || false,
-    hasSignificantExpense: row?.hasSignificantExpense || false,
-    monthlySaving: row?.monthlySaving || 0,
-    endBalance: row?.endBalance || 0,
-    expenses: row?.expenses || [],
-    totalExpenses: row?.totalExpenses || 0,
-    color: getPointColor(idx)
-  })));
-
-  // Additional debugging for color detection
-  console.log("Color analysis:");
-  filteredData.forEach((row, idx) => {
-    if (!row) return;
-    const color = getPointColor(idx);
-    if (color !== '#ff9800') {
-      console.log(`Month ${row.month} (index ${idx}): Color ${color}`, {
-        isAdjustingToInitial: row.isAdjustingToInitial,
-        hasSignificantExpense: row.hasSignificantExpense,
-        monthlySaving: row.monthlySaving,
-        prevMonthlySaving: idx > 0 && filteredData[idx-1] ? filteredData[idx-1].monthlySaving : 'N/A'
-      });
-    }
-  });
 
   const options = {
     responsive: true,
@@ -266,14 +246,6 @@ const SavingsChart = ({ monthlyCalculation }) => {
                   lineWidth: 0,
                   pointStyle: 'circle',
                   fontColor: '#f44336'
-                },
-                {
-                  text: '● Orange points indicate months with regular expenses (annual/irregular)',
-                  fillStyle: '#ff9800',
-                  strokeStyle: '#ff9800',
-                  lineWidth: 0,
-                  pointStyle: 'circle',
-                  fontColor: '#ff9800'
                 },
                 {
                   text: '● Purple points indicate start of adjustment cycles towards target balance',
@@ -313,7 +285,7 @@ const SavingsChart = ({ monthlyCalculation }) => {
           label: function(context) {
             try {
               const idx = context.dataIndex;
-              const row = filteredData[idx];
+              const row = projectedData[idx];
               
               if (!row) return [];
               
@@ -326,50 +298,34 @@ const SavingsChart = ({ monthlyCalculation }) => {
               // Start balance
               labels.push(`📊 Start Balance: ${formatCHF(row.startBalance || 0)}`);
               
-              // Monthly saving with green color indicator
-              if (row.isAdjustingToInitial) {
-                labels.push(`🟣 Adjustment: Recalculating savings after one-off payment`);
-                labels.push(`🟢 Monthly Saving: ${formatCHF(row.monthlySaving || 0)}`);
-              } else if (idx > 0 && filteredData[idx - 1]) {
-                const prevRow = filteredData[idx - 1];
-                const savingChanged = Math.abs((row.monthlySaving || 0) - (prevRow.monthlySaving || 0)) > 0.01;
-                
-                if (savingChanged) {
-                  const diff = (row.monthlySaving || 0) - (prevRow.monthlySaving || 0);
-                  const direction = diff > 0 ? '↑' : '↓';
-                  const color = diff < 0 ? '🔵' : '🟢';
-                  labels.push(`${color} Monthly Saving: ${formatCHF(row.monthlySaving || 0)} ${direction} (${formatCHF(Math.abs(diff))} ${diff > 0 ? 'more' : 'less'})`);
-                } else {
-                  labels.push(`🟢 Monthly Saving: ${formatCHF(row.monthlySaving || 0)}`);
-                }
-              } else {
-                labels.push(`🟢 Monthly Saving: ${formatCHF(row.monthlySaving || 0)}`);
+              // Regular savings
+              labels.push(`🟢 Regular Savings: ${formatCHF(row.regularSaving || 0)}`);
+              
+              // One-off contributions
+              if (row.oneOffContribution > 0) {
+                labels.push(`🔵 One-off Contributions: ${formatCHF(row.oneOffContribution || 0)}`);
               }
+              
+              // Total monthly saving
+              labels.push(`💰 Total Monthly Saving: ${formatCHF(row.monthlySaving || 0)}`);
               
               // Add separator
               labels.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
               
-              // Expenses - highlight based on type
+              // Expenses - highlight if one-off
               if (row.expenses && row.expenses.length > 0) {
-                let expenseText;
-                if (row.hasSignificantExpense) {
-                  expenseText = `🔴 One-off Expenses: ${row.expenses.join(', ')}`;
-                } else if (row.hasRegularExpense) {
-                  expenseText = `🟡 Regular Expenses: ${row.expenses.join(', ')}`;
-                } else {
-                  expenseText = `📋 Expenses: ${row.expenses.join(', ')}`;
-                }
+                const expenseText = row.hasSignificantExpense 
+                  ? `🔴 One-off Expenses: ${row.expenses.join(', ')}` 
+                  : `📋 Expenses: ${row.expenses.join(', ')}`;
                 labels.push(expenseText);
               } else if (!row.isAdjustingToInitial) {
                 labels.push('📋 Expenses: None');
               }
               
-              // Total expenses with color indicator based on type
+              // Total expenses with orange color indicator
               if (row.totalExpenses && row.totalExpenses > 0) {
                 if (row.hasSignificantExpense) {
-                  labels.push(`🔴 Total Expenses: ${formatCHF(row.totalExpenses)} (contains one-off payment)`);
-                } else if (row.hasRegularExpense) {
-                  labels.push(`🟡 Total Expenses: ${formatCHF(row.totalExpenses)} (contains regular payment)`);
+                  labels.push(`🟠 Total Expenses: ${formatCHF(row.totalExpenses)} (contains one-off payment)`);
                 } else {
                   labels.push(`🟠 Total Expenses: ${formatCHF(row.totalExpenses)}`);
                 }
@@ -434,31 +390,6 @@ const SavingsChart = ({ monthlyCalculation }) => {
           },
           font: {
             size: tickFontSize
-          },
-          padding: 10
-        }
-      },
-      y1: {
-        display: showMonthlySavings,
-        position: 'right',
-        title: {
-          display: true,
-          text: 'Monthly Savings (CHF)',
-          font: {
-            size: axisLabelFontSize * 0.8,
-            weight: 'bold'
-          },
-          padding: { left: 15, right: 15 }
-        },
-        grid: {
-          display: false,
-        },
-        ticks: {
-          callback: function(value) {
-            return formatCHF(value);
-          },
-          font: {
-            size: tickFontSize * 0.8
           },
           padding: 10
         }
@@ -541,36 +472,7 @@ const SavingsChart = ({ monthlyCalculation }) => {
           }
         },
         yAxisID: 'y'
-      },
-      ...(showMonthlySavings ? [{
-        label: 'Monthly Savings',
-        data: monthlySavingsPoints,
-        borderColor: '#4caf50',
-        backgroundColor: 'rgba(76, 175, 80, 0.1)',
-        fill: false,
-        pointBackgroundColor: (ctx) => {
-          try {
-            const idx = ctx.dataIndex;
-            // Change point color for months when savings amount changes
-            if (idx > 0 && idx < filteredData.length && filteredData[idx] && filteredData[idx - 1]) {
-              const row = filteredData[idx];
-              const prevRow = filteredData[idx - 1];
-              const savingChanged = Math.abs((row.monthlySaving || 0) - (prevRow.monthlySaving || 0)) > 0.01;
-              if (savingChanged) {
-                return '#2196f3'; // Blue for months when savings change
-              }
-            }
-            return '#4caf50'; // Default green
-          } catch (error) {
-            console.error('Error getting monthly savings point color:', error);
-            return '#4caf50';
-          }
-        },
-        pointBorderColor: '#fff',
-        pointStyle: 'rectRot',
-        borderDash: [5, 5],
-        yAxisID: 'y1'
-      }] : [])
+      }
     ]
   };
 
@@ -605,11 +507,11 @@ const SavingsChart = ({ monthlyCalculation }) => {
           ref={chartRef}
           data={data} 
           options={options} 
-          key={`chart-${timeSpan}-${filteredData.length}`} // Force re-render when data changes
+          key={`chart-${timeSpan}-${projectedData.length}`} // Force re-render when data changes
         />
       </div>
     </div>
   );
 };
 
-export default SavingsChart; 
+export default SeparatedSavingsChart;

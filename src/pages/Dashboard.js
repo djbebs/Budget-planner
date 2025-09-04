@@ -5,8 +5,12 @@ import {
   Paper,
   Typography,
   Box,
+  Tooltip,
+  IconButton,
 } from '@mui/material';
+import InfoIcon from '@mui/icons-material/Info';
 import { useFinancial } from '../context/FinancialContext';
+import { calculateMonthlySavingsNeeded } from '../utils';
 
 function Dashboard() {
   const { state } = useFinancial();
@@ -16,9 +20,11 @@ function Dashboard() {
       .filter(income => income.frequency === 'Monthly')
       .reduce((sum, income) => sum + income.amount, 0);
 
+    const monthlySavingNeed = calculateMonthlySavingsNeeded(state.expenses, state.savings.currentAmount);
+
     const totalExpenses = state.expenses
       .filter(expense => expense.recurrence === 'Monthly')
-      .reduce((sum, expense) => sum + expense.amount, 0);
+      .reduce((sum, expense) => sum + expense.amount, 0) + monthlySavingNeed;
 
     const monthlySavings = totalIncome - totalExpenses;
 
@@ -44,9 +50,10 @@ function Dashboard() {
       totalIncome,
       totalExpenses,
       monthlySavings,
+      monthlySavingNeed,
       upcomingPayments,
     };
-  }, [state.income, state.expenses]);
+  }, [state.income, state.expenses, state.savings.currentAmount]);
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4 }}>
@@ -92,6 +99,29 @@ function Dashboard() {
                 style: 'currency',
                 currency: 'CHF',
               })}
+            </Typography>
+          </Paper>
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', height: 'auto', minHeight: 140 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+              <Typography component="h2" variant="h6" color="primary">
+                Monthly Saving Need
+              </Typography>
+              <Tooltip title="This is the recommended monthly amount you should save to cover all your annual and irregular expenses over the next 24 months">
+                <IconButton size="small" sx={{ ml: 1 }}>
+                  <InfoIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Box>
+            <Typography component="p" variant="h4" color="secondary">
+              {summaryData.monthlySavingNeed.toLocaleString('en-US', {
+                style: 'currency',
+                currency: 'CHF',
+              })}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              This amount is included in your total monthly expenses to ensure you're saving enough for future payments.
             </Typography>
           </Paper>
         </Grid>
