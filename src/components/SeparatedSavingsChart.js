@@ -64,8 +64,10 @@ const SeparatedSavingsChart = ({
   // Cleanup chart on unmount
   useEffect(() => {
     return () => {
-      if (chartRef.current) {
-        chartRef.current.destroy();
+      // Store the chart instance in a variable to avoid the React Hook warning
+      const chart = chartRef.current;
+      if (chart) {
+        chart.destroy();
       }
     };
   }, []);
@@ -178,8 +180,9 @@ const SeparatedSavingsChart = ({
   // Use projected data for chart
   const labels = projectedData.map(row => row?.month || '');
   const dataPoints = projectedData.map(row => row?.endBalance || 0);
-  const regularSavingsPoints = projectedData.map(row => row?.regularSaving || 0);
-  const oneOffSavingsPoints = projectedData.map(row => row?.oneOffContribution || 0);
+  // These points are not currently used in the chart but might be needed in future
+  // const regularSavingsPoints = projectedData.map(row => row?.regularSaving || 0);
+  // const oneOffSavingsPoints = projectedData.map(row => row?.oneOffContribution || 0);
 
   // Helper function to get point color based on data
   const getPointColor = (idx) => {

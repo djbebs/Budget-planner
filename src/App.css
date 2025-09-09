@@ -1,0 +1,668 @@
+.App {
+  padding: 20px;
+  font-family: Arial, sans-serif;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.App-header {
+  margin-bottom: 20px;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 15px;
+}
+
+h1 {
+  font-size: 48px;
+  margin-bottom: 20px;
+}
+
+h2 {
+  font-size: 40px;
+  margin: 24px 0;
+  color: #333;
+}
+
+h3 {
+  font-size: 32px;
+  margin: 20px 0;
+  color: #444;
+}
+
+.note, .explanation {
+  margin: 10px 0;
+  line-height: 1.5;
+}
+
+.calculation-table {
+  overflow-x: auto;
+  margin-bottom: 20px;
+}
+
+/* Tab Navigation */
+.tab-navigation {
+  display: flex;
+  border-bottom: 1px solid #ccc;
+  margin-bottom: 20px;
+}
+
+.tab-navigation button {
+  padding: 16px 30px;
+  background: #f2f2f2;
+  border: 1px solid #ccc;
+  border-bottom: none;
+  margin-right: 8px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 24px;
+  border-radius: 8px 8px 0 0;
+  transition: background-color 0.2s;
+}
+
+.tab-navigation button:hover {
+  background-color: #e0e0e0;
+}
+
+.tab-navigation button.active {
+  background: #fff;
+  border-bottom: 1px solid #fff;
+  position: relative;
+  bottom: -1px;
+}
+
+/* Tab Content */
+.tab-content {
+  background: #fff;
+  padding: 20px;
+  border-radius: 0 5px 5px 5px;
+}
+
+/* Dynamic Layout Styles */
+.dynamic-layout {
+  display: flex;
+  flex-direction: column;
+}
+
+.dynamic-results {
+  margin-top: 40px;
+  border-top: 2px dashed #4CAF50;
+  padding-top: 24px;
+}
+
+.dynamic-results h3 {
+  color: #4CAF50;
+  margin-bottom: 24px;
+}
+
+.summary-table-container {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  margin-top: 16px;
+}
+
+.calculation-summary table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.calculation-summary th, 
+.calculation-summary td {
+  padding: 16px;
+  text-align: left;
+}
+
+.calculation-summary thead {
+  position: sticky;
+  top: 0;
+  background-color: #f4f4f4;
+  z-index: 1;
+}
+
+/* Input Form Styling */
+.input-section {
+  margin-bottom: 25px;
+  padding: 15px;
+  border: 1px solid #e0e0e0;
+  border-radius: 5px;
+  background-color: #f9f9f9;
+}
+
+.input-group {
+  margin-bottom: 15px;
+}
+
+.input-group label {
+  display: block;
+  margin-bottom: 12px;
+  font-weight: bold;
+  font-size: 24px;
+}
+
+.input-group input, .input-group select {
+  width: 100%;
+  padding: 16px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 24px;
+}
+
+.expenses-table {
+  width: 100%;
+  margin-bottom: 20px;
+}
+
+.add-expense-form {
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px dashed #ccc;
+}
+
+.form-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.form-row input, .form-row select {
+  padding: 16px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 24px;
+  flex: 1;
+}
+
+.action-buttons {
+  margin-top: 20px;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.action-buttons button {
+  padding: 16px 30px;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 24px;
+}
+
+.action-buttons button:hover {
+  background-color: #45a049;
+}
+
+/* Results Styling */
+.results-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-bottom: 25px;
+}
+
+.result-card {
+  flex: 1;
+  min-width: 200px;
+  padding: 15px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  background-color: #f9f9f9;
+}
+
+.result-card h3 {
+  margin-top: 0;
+  margin-bottom: 16px;
+  color: #555;
+  font-size: 28px;
+}
+
+.result-value {
+  font-size: 42px;
+  font-weight: bold;
+  color: #333;
+}
+
+.key-insights {
+  margin-bottom: 25px;
+  padding: 15px;
+  border: 1px solid #d9edf7;
+  border-radius: 5px;
+  background-color: #f4f8fa;
+}
+
+.key-insights h3 {
+  color: #31708f;
+  margin-top: 0;
+}
+
+.key-insights ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.key-insights li {
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+/* CSV Upload Section */
+.csv-upload-section {
+  margin-bottom: 20px;
+  padding: 15px;
+  border: 1px dashed #ccc;
+  border-radius: 5px;
+  background-color: #f5f5f5;
+}
+
+.csv-hint {
+  margin: 16px 0 0;
+  font-size: 22px;
+  color: #666;
+  font-style: italic;
+}
+
+.disabled-button {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.template-info {
+  margin-top: 15px;
+  padding: 10px;
+  background-color: #f0f7ff;
+  border: 1px solid #d0e3ff;
+  border-radius: 5px;
+}
+
+.template-info h5 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: #0066cc;
+}
+
+.template-info ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.template-info ul ul {
+  margin: 5px 0;
+}
+
+.template-info li {
+  margin-bottom: 10px;
+  font-size: 24px;
+}
+
+.template-info a {
+  display: inline-block;
+  padding: 8px 15px;
+  margin-top: 10px;
+  background-color: #4CAF50;
+  color: white;
+  text-decoration: none;
+  border-radius: 4px;
+  font-weight: bold;
+}
+
+.template-info a:hover {
+  background-color: #45a049;
+}
+
+/* Income Styles */
+.income-summary {
+  margin-bottom: 25px;
+}
+
+.income-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-top: 10px;
+}
+
+.income-details {
+  margin-top: 16px;
+  font-size: 24px;
+}
+
+.income-item {
+  margin-bottom: 5px;
+  padding: 2px 0;
+  border-bottom: 1px dashed #eee;
+}
+
+.result-card.highlight {
+  background-color: #f0f7ff;
+  border-color: #a8d1ff;
+}
+
+/* Edit Dialog Styles */
+.dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.dialog-content {
+  background-color: white;
+  padding: 25px;
+  border-radius: 8px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  max-width: 500px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.dialog-content h3 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  color: #333;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 10px;
+}
+
+.dialog-field {
+  margin-bottom: 15px;
+}
+
+.dialog-field label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: bold;
+}
+
+.dialog-field input,
+.dialog-field select {
+  width: 100%;
+  padding: 16px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 24px;
+}
+
+.dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.dialog-buttons button {
+  padding: 10px 15px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.dialog-buttons button:first-child {
+  background-color: #f5f5f5;
+  color: #333;
+}
+
+.dialog-buttons button:last-child {
+  background-color: #4CAF50;
+  color: white;
+}
+
+/* Action Buttons in Tables */
+.action-buttons-cell {
+  display: flex;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.edit-button, 
+.remove-button {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 22px;
+}
+
+.edit-button {
+  background-color: #3498db;
+  color: white;
+}
+
+.remove-button {
+  background-color: #e74c3c;
+  color: white;
+}
+
+/* Graph Tab Styles */
+.graph-container {
+  height: 500px;
+  margin: 20px 0;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 20px;
+  background-color: #fff;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  position: relative;
+}
+
+/* Custom styles for step-line chart appearance */
+canvas {
+  image-rendering: crisp-edges;
+}
+
+.graph-insights {
+  margin: 20px 0;
+  padding: 15px;
+  background-color: #f9f9f9;
+  border: 1px solid #e0e0e0;
+  border-radius: 5px;
+}
+
+.graph-insights h3 {
+  margin-top: 0;
+  color: #333;
+}
+
+.graph-insights ul {
+  margin-bottom: 0;
+}
+
+.graph-insights .warning {
+  color: #e74c3c;
+  font-weight: bold;
+}
+
+.graph-insights .success {
+  color: #2ecc71;
+  font-weight: bold;
+}
+
+.no-data-message {
+  text-align: center;
+  padding: 100px 0;
+  color: #666;
+  font-style: italic;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th, td {
+  padding: 16px 20px;
+  text-align: left;
+  border: 1px solid #ddd;
+  font-size: 24px;
+}
+
+th {
+  background-color: #f4f4f4;
+}
+
+.one-off-expense {
+  background-color: rgba(255, 99, 71, 0.2);
+}
+
+.regular-expense {
+  background-color: rgba(255, 206, 86, 0.2);
+}
+
+.after-payment {
+  background-color: rgba(153, 102, 255, 0.2);
+}
+
+.savings-adjustment {
+  background-color: rgba(75, 192, 192, 0.2);
+}
+
+/* Enhanced styling for better visibility */
+td {
+  position: relative;
+}
+
+tr {
+  transition: all 0.2s ease;
+}
+
+tr:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.one-off-expense-marker, 
+.regular-expense-marker, 
+.after-payment-marker,
+.savings-adjustment-marker,
+.temporary-increase-marker {
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.legend {
+  border: 1px solid #ddd;
+  padding: 15px;
+  margin-top: 20px;
+  background-color: #f9f9f9;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  border-radius: 4px;
+}
+
+.legend h3 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 18px;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 8px;
+}
+
+.legend-grid {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.legend-column {
+  flex: 1;
+  min-width: 250px;
+  padding: 0 20px 0 0;
+}
+
+.legend p {
+  font-size: 24px;
+  margin: 14px 0;
+  display: flex;
+  align-items: center;
+  padding: 10px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.legend p:hover {
+  background-color: rgba(0,0,0,0.03);
+}
+
+.one-off-expense-marker,
+.regular-expense-marker,
+.after-payment-marker,
+.savings-adjustment-marker,
+.temporary-increase-marker {
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  margin-right: 8px;
+  border-radius: 3px;
+}
+
+.one-off-expense-marker {
+  background-color: rgba(255, 99, 71, 0.3);
+}
+
+.regular-expense-marker {
+  background-color: rgba(255, 206, 86, 0.3);
+}
+
+.after-payment-marker {
+  background-color: rgba(153, 102, 255, 0.3);
+}
+
+.savings-adjustment-marker {
+  background-color: rgba(75, 192, 192, 0.3);
+}
+
+.temporary-increase-marker {
+  background-color: rgba(54, 162, 235, 0.3);
+}
+
+/* Requirements Tab Styles */
+.requirements-container {
+  margin: 20px 0;
+  padding: 0 10px;
+}
+
+.requirements-container h3 {
+  margin: 25px 0 15px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e0e0e0;
+  color: #2980b9;
+  font-size: 18px;
+}
+
+.requirements-container h3:first-child {
+  margin-top: 0;
+}
+
+.requirements-list {
+  padding-left: 20px;
+  margin: 10px 0 20px;
+}
+
+.requirements-list li {
+  margin-bottom: 12px;
+  line-height: 1.5;
+  position: relative;
+  padding-left: 5px;
+}
+
+.requirements-list ul {
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
+.requirements-list ul li {
+  margin-bottom: 6px;
+}
+
+.requirements-list li::before {
+  content: "•";
+  color: #3498db;
+  font-weight: bold;
+  display: inline-block;
+  position: absolute;
+  left: -15px;
+}

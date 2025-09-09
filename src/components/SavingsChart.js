@@ -67,8 +67,10 @@ const SavingsChart = ({ monthlyCalculation }) => {
   // Cleanup chart on unmount
   useEffect(() => {
     return () => {
-      if (chartRef.current) {
-        chartRef.current.destroy();
+      // Store the chart instance in a variable to avoid the React Hook warning
+      const chart = chartRef.current;
+      if (chart) {
+        chart.destroy();
       }
     };
   }, []);

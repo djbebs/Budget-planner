@@ -43,7 +43,8 @@ import {
 } from '@mui/icons-material';
 import { useFinancial } from '../context/FinancialContext';
 import SavingsChart from '../components/SavingsChart';
-import SeparatedSavingsChart from '../components/SeparatedSavingsChart';
+// SeparatedSavingsChart is not currently used
+// import SeparatedSavingsChart from '../components/SeparatedSavingsChart';
 import FinancialDashboard from '../components/FinancialDashboard';
 import { saveAs } from 'file-saver';
 import { calculateMonthlySavingsNeeded, getMonthlyCalculationDetails } from '../utils';
@@ -89,6 +90,7 @@ const SavingsPlanner = ({ themeMode, toggleTheme }) => {
   const [oneOffSavingsNeeded, setOneOffSavingsNeeded] = useState(0);
   const [oneOffTimeline, setOneOffTimeline] = useState([]);
   const [expenseFilter, setExpenseFilter] = useState('all'); // 'all', 'regular', 'oneoff'
+  const [mainTab, setMainTab] = useState(0); // 0: Input, 1: Output
 
   const categories = [
     'Tax',
@@ -161,11 +163,23 @@ const SavingsPlanner = ({ themeMode, toggleTheme }) => {
 
   // Calculate one-off payment timeline and required monthly savings
   const calculateOneOffTimeline = (expenses) => {
-    const oneOffExpenses = expenses.filter(exp => exp.recurrence === 'One-off');
+    // Validate expenses array
+    if (!expenses || !Array.isArray(expenses)) {
+      console.error('Invalid expenses array provided to calculateOneOffTimeline');
+      return { timeline: [], totalOneOffSavings: 0 };
+    }
+    
+    const oneOffExpenses = expenses.filter(exp => exp && typeof exp === 'object' && exp.recurrence === 'One-off');
     const today = new Date();
     const startDate = new Date(today.getFullYear(), today.getMonth() + 1, 1);
     
     const timeline = oneOffExpenses.map(expense => {
+      // Validate expense object
+      if (!expense || typeof expense !== 'object') {
+        console.error('Invalid expense object in calculateOneOffTimeline:', expense);
+        return null;
+      }
+      
       let paymentDate;
       
       if (expense.oneOffDate) {
@@ -181,6 +195,12 @@ const SavingsPlanner = ({ themeMode, toggleTheme }) => {
       } else {
         paymentDate = new Date(startDate);
         paymentDate.setFullYear(startDate.getFullYear() + 1);
+      }
+      
+      // Validate payment date
+      if (!paymentDate || isNaN(paymentDate.getTime())) {
+        console.error('Invalid payment date calculated for expense:', expense);
+        paymentDate = new Date(startDate.getFullYear() + 1, startDate.getMonth(), startDate.getDate());
       }
       
       const monthsUntil = Math.max(1, Math.ceil(
@@ -199,7 +219,7 @@ const SavingsPlanner = ({ themeMode, toggleTheme }) => {
         monthlyContribution,
         monthName: paymentDate.toLocaleString('default', { month: 'short', year: 'numeric' })
       };
-    }).sort((a, b) => a.paymentDate - b.paymentDate);
+    }).filter(item => item !== null).sort((a, b) => a.paymentDate - b.paymentDate);
     
     const totalOneOffSavings = timeline.reduce((sum, item) => sum + item.monthlyContribution, 0);
     
@@ -207,6 +227,12 @@ const SavingsPlanner = ({ themeMode, toggleTheme }) => {
   };
 
   const getNextDueDate = (expense) => {
+    // Validate expense object
+    if (!expense || typeof expense !== 'object') {
+      console.error('Invalid expense object provided to getNextDueDate:', expense);
+      return '';
+    }
+    
     const today = new Date();
     if (!expense.paymentSchedule && expense.recurrence !== 'Monthly') return '';
 
@@ -242,6 +268,12 @@ const SavingsPlanner = ({ themeMode, toggleTheme }) => {
   };
 
   const generateNotes = (expense) => {
+    // Validate expense object
+    if (!expense || typeof expense !== 'object') {
+      console.error('Invalid expense object provided to generateNotes:', expense);
+      return '';
+    }
+    
     if (!expense.amount) return '';
     const amount = parseFloat(expense.amount);
     
@@ -402,7 +434,7 @@ const SavingsPlanner = ({ themeMode, toggleTheme }) => {
       type: 'UPDATE_PROJECTED_SAVINGS',
       payload: projectedPoints
     });
-  }, [state.expenses, state.savings.currentAmount, state.savings.targetAmount, state.savings.adjustmentCycle, dispatch]);
+  }, [state.expenses, state.savings.currentAmount, state.savings.targetAmount, state.savings.adjustmentCycle, dispatch, calculateRegularSavings]);
 
   const handleSavingsUpdate = (amount) => {
     console.log("Updating savings amount to:", amount);
@@ -823,7 +855,40 @@ const SavingsPlanner = ({ themeMode, toggleTheme }) => {
         </Fab>
       </Tooltip>
       
-      {/* Summary Section */}
+      {/* Main Tab Navigation */}
+      <Paper sx={{ mb: 3 }}>
+        <Tabs 
+          value={mainTab} 
+          onChange={(e, newValue) => setMainTab(newValue)}
+          variant="fullWidth"
+          sx={{ 
+            borderBottom: 1, 
+            borderColor: 'divider',
+            '& .MuiTab-root': { 
+              fontSize: '1.5rem',
+              fontWeight: 'bold',
+              py: 3,
+              minHeight: 80
+            }
+          }}
+        >
+          <Tab 
+            icon={<ReceiptIcon sx={{ fontSize: '2rem' }} />} 
+            label="Input Data" 
+            iconPosition="start"
+            sx={{ fontSize: '1.5rem' }}
+          />
+          <Tab 
+            icon={<AssessmentIcon sx={{ fontSize: '2rem' }} />} 
+            label="View Results" 
+            iconPosition="start"
+            sx={{ fontSize: '1.5rem' }}
+          />
+        </Tabs>
+      </Paper>
+
+      {/* Summary Section - Only show on Output tab */}
+      {mainTab === 1 && (
       <Paper sx={{ p: 3, mb: 3, bgcolor: 'primary.main', color: 'white' }}>
         <Typography variant="h4" sx={{ mb: 2, fontWeight: 'bold', fontSize: { xs: '2rem', sm: '3rem', md: '4rem' } }}>
           Financial Planning Summary
@@ -864,42 +929,379 @@ const SavingsPlanner = ({ themeMode, toggleTheme }) => {
             </Grid>
           </Grid>
       </Paper>
+      )}
 
+      {/* Input Tab Content */}
+      {mainTab === 0 && (
       <Grid container spacing={3}>
+          {/* Instructions Section */}
+          <Grid item xs={12}>
+            <Paper sx={{ p: 3, bgcolor: 'info.light', color: 'info.contrastText' }}>
+              <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, fontSize: '1.8rem' }}>
+                📝 Input Your Financial Data
+              </Typography>
+              <Typography variant="body1" sx={{ fontSize: '1.2rem', mb: 2 }}>
+                Use this tab to enter and manage your financial information. Start by setting your current savings and target balance, 
+                then add your income sources and expenses. The system will automatically calculate your required monthly savings.
+              </Typography>
+              <Typography variant="body2" sx={{ fontSize: '1.1rem', fontStyle: 'italic' }}>
+                💡 Tip: Switch to the "View Results" tab to see charts, detailed calculations, and financial projections.
+              </Typography>
+            </Paper>
+          </Grid>
+
+          {/* Quick Summary Cards */}
+          <Grid item xs={12}>
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={3}>
+                <Paper sx={{ p: 3, textAlign: 'center', bgcolor: 'primary.main', color: 'white' }}>
+                  <Typography variant="h6" sx={{ fontSize: '1.2rem', mb: 1 }}>
+                    Total Monthly Savings
+                  </Typography>
+                  <Typography variant="h4" sx={{ fontSize: '2rem', fontWeight: 'bold' }}>
+                    {totalSavingsNeeded.toLocaleString('de-CH', { style: 'currency', currency: 'CHF' })}
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <Paper sx={{ p: 3, textAlign: 'center', bgcolor: 'success.main', color: 'white' }}>
+                  <Typography variant="h6" sx={{ fontSize: '1.2rem', mb: 1 }}>
+                    Current Balance
+                  </Typography>
+                  <Typography variant="h4" sx={{ fontSize: '2rem', fontWeight: 'bold' }}>
+                    {state.savings.currentAmount.toLocaleString('de-CH', { style: 'currency', currency: 'CHF' })}
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <Paper sx={{ p: 3, textAlign: 'center', bgcolor: 'warning.main', color: 'white' }}>
+                  <Typography variant="h6" sx={{ fontSize: '1.2rem', mb: 1 }}>
+                    Target Balance
+                  </Typography>
+                  <Typography variant="h4" sx={{ fontSize: '2rem', fontWeight: 'bold' }}>
+                    {state.savings.targetAmount.toLocaleString('de-CH', { style: 'currency', currency: 'CHF' })}
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <Paper sx={{ p: 3, textAlign: 'center', bgcolor: 'info.main', color: 'white' }}>
+                  <Typography variant="h6" sx={{ fontSize: '1.2rem', mb: 1 }}>
+                    Total Expenses
+                  </Typography>
+                  <Typography variant="h4" sx={{ fontSize: '2rem', fontWeight: 'bold' }}>
+                    {state.expenses.length}
+                  </Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+          </Grid>
+
         {/* Current Savings Section */}
         <Grid item xs={12}>
-          <Paper sx={{ p: 3, display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: 'center', gap: 2 }}>
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold', mb: 3, fontSize: '2rem' }}>
+                Financial Settings
+              </Typography>
+              <Grid container spacing={3} alignItems="center">
+                <Grid item xs={12} md={6}>
             <Tooltip title="This is your current savings amount.">
               <TextField
-                label="Current Savings"
+                      fullWidth
+                      label="Current Savings (CHF)"
                 type="number"
                 value={state.savings.currentAmount}
                 onChange={(e) => handleSavingsUpdate(e.target.value)}
                 sx={{ 
-                  width: { xs: '100%', sm: 200 },
-                  '& .MuiInputLabel-root': { fontSize: '1.1rem' },
-                  '& .MuiInputBase-input': { fontSize: '1.2rem' }
+                        '& .MuiInputLabel-root': { fontSize: '1.2rem' },
+                        '& .MuiInputBase-input': { fontSize: '1.3rem', py: 2 }
                 }}
               />
             </Tooltip>
+                </Grid>
+                <Grid item xs={12} md={6}>
             <Tooltip title="This is the minimum balance you should never go below. It acts as your financial safety threshold.">
               <TextField
-                label="Target Balance"
+                      fullWidth
+                      label="Target Balance (CHF)"
                 type="number"
                 value={state.savings.targetAmount}
                 onChange={(e) => handleTargetAmountUpdate(e.target.value)}
                 sx={{ 
-                  width: { xs: '100%', sm: 200 },
-                  '& .MuiInputLabel-root': { fontSize: '1.1rem' },
-                  '& .MuiInputBase-input': { fontSize: '1.2rem' }
+                        '& .MuiInputLabel-root': { fontSize: '1.2rem' },
+                        '& .MuiInputBase-input': { fontSize: '1.3rem', py: 2 }
                 }}
                 placeholder="Minimum balance (safety threshold)"
               />
             </Tooltip>
+                </Grid>
+              </Grid>
           </Paper>
         </Grid>
 
-        {/* Tabs Section */}
+          {/* Income Management Section */}
+          <Grid item xs={12}>
+            <Paper sx={{ p: 3 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+                <Typography variant="h5" sx={{ fontWeight: 'bold', fontSize: '2rem' }}>Income Sources</Typography>
+                <Grid container spacing={2} alignItems="center" sx={{ maxWidth: 400 }}>
+                  <Grid item xs={6}>
+                    <input
+                      type="file"
+                      accept=".csv"
+                      style={{ display: 'none' }}
+                      ref={incomeFileInputRef}
+                      onChange={handleIncomeFileUpload}
+                    />
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      startIcon={<UploadIcon />}
+                      onClick={() => incomeFileInputRef.current.click()}
+                      sx={{ fontSize: '1.1rem', py: 1.5 }}
+                    >
+                      Import CSV
+                    </Button>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Button
+                      fullWidth
+                      variant="contained"
+                      startIcon={<AddIcon />}
+                      onClick={() => {
+                        setEditingIncome(null);
+                        setIncomeErrors({});
+                        setOpenIncomeDialog(true);
+                      }}
+                      sx={{ fontSize: '1.1rem', py: 1.5 }}
+                    >
+                      Add Income
+                    </Button>
+                  </Grid>
+                </Grid>
+              </div>
+              
+              {state.income.length === 0 ? (
+                <Box sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
+                  <Typography variant="h6" sx={{ mb: 2 }}>No income sources added yet</Typography>
+                  <Typography variant="body1">Click "Add Income" to get started with your financial planning</Typography>
+                </Box>
+              ) : (
+                <div style={{ width: '100%', overflowX: 'auto' }}>
+                  <Table sx={{ minWidth: 900 }}>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '1.2rem' }}>Person</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '1.2rem' }}>Source</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '1.2rem' }}>Frequency</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '1.2rem' }}>Amount (CHF)</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '1.2rem' }}>Schedule</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '1.2rem' }}>Actions</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {state.income.map((income) => (
+                        <TableRow key={income.id}>
+                          <TableCell sx={{ fontSize: '1.1rem' }}>{income.person}</TableCell>
+                          <TableCell sx={{ fontSize: '1.1rem' }}>{income.source}</TableCell>
+                          <TableCell sx={{ fontSize: '1.1rem' }}>{income.frequency}</TableCell>
+                          <TableCell sx={{ fontSize: '1.1rem' }}>
+                            {income.amount.toLocaleString('de-CH', { style: 'currency', currency: 'CHF' })}
+                          </TableCell>
+                          <TableCell sx={{ fontSize: '1.1rem' }}>
+                            {income.frequency === 'Monthly' ? 'Monthly' : income.startDate}
+                          </TableCell>
+                          <TableCell>
+                            <IconButton
+                              onClick={() => {
+                                setEditingIncome(income);
+                                setNewIncome(income);
+                                setIncomeErrors({});
+                                setOpenIncomeDialog(true);
+                              }}
+                            >
+                              <EditIcon />
+                            </IconButton>
+                            <IconButton onClick={() => handleDeleteIncome(income.id)}>
+                              <DeleteIcon />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </Paper>
+          </Grid>
+
+          {/* Expense Management Section */}
+          <Grid item xs={12}>
+            <Paper sx={{ p: 3 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+                <Typography variant="h5" sx={{ fontWeight: 'bold', fontSize: '2rem' }}>Expenses</Typography>
+                <Grid container spacing={2} alignItems="center" sx={{ maxWidth: 500 }}>
+                  <Grid item xs={4}>
+                    <input
+                      type="file"
+                      accept=".csv"
+                      style={{ display: 'none' }}
+                      ref={fileInputRef}
+                      onChange={handleFileUpload}
+                    />
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      startIcon={<UploadIcon />}
+                      onClick={() => fileInputRef.current.click()}
+                      sx={{ fontSize: '1.1rem', py: 1.5 }}
+                    >
+                      Import
+                    </Button>
+                  </Grid>
+                  <Grid item xs={4}>
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      onClick={handleExportCSV}
+                      sx={{ fontSize: '1.1rem', py: 1.5 }}
+                    >
+                      Export
+                    </Button>
+                  </Grid>
+                  <Grid item xs={4}>
+                    <Button
+                      fullWidth
+                      variant="contained"
+                      startIcon={<AddIcon />}
+                      onClick={() => {
+                        setEditingExpense(null);
+                        setErrors({});
+                        setOpenDialog(true);
+                      }}
+                      sx={{ fontSize: '1.1rem', py: 1.5 }}
+                    >
+                      Add Expense
+                    </Button>
+                  </Grid>
+                </Grid>
+              </div>
+
+              {/* Filter and Summary */}
+              <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+                <FormControl sx={{ minWidth: 200 }}>
+                  <InputLabel>Filter Expenses</InputLabel>
+                  <Select
+                    value={expenseFilter}
+                    label="Filter Expenses"
+                    onChange={(e) => setExpenseFilter(e.target.value)}
+                    sx={{ fontSize: '1.1rem' }}
+                  >
+                    <MenuItem value="all">All Expenses</MenuItem>
+                    <MenuItem value="regular">Regular Payments Only</MenuItem>
+                    <MenuItem value="oneoff">One-off Payments Only</MenuItem>
+                  </Select>
+                </FormControl>
+                
+                <Box sx={{ textAlign: 'right' }}>
+                  <Typography variant="h6" sx={{ fontSize: '1.3rem', fontWeight: 'bold' }}>
+                    Total Monthly: {totalSavingsNeeded.toLocaleString('de-CH', { style: 'currency', currency: 'CHF' })}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {state.expenses.length} expense(s) configured
+                  </Typography>
+                </Box>
+              </Box>
+              
+              {state.expenses.length === 0 ? (
+                <Box sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
+                  <Typography variant="h6" sx={{ mb: 2 }}>No expenses added yet</Typography>
+                  <Typography variant="body1">Click "Add Expense" to start tracking your financial obligations</Typography>
+                </Box>
+              ) : (
+                <div style={{ width: '100%', overflowX: 'auto' }}>
+                  <Table sx={{ minWidth: 1200 }}>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '1.2rem' }}>Category</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '1.2rem' }}>Description</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '1.2rem' }}>Amount</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '1.2rem' }}>Recurrence</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '1.2rem' }}>Monthly Equivalent</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '1.2rem' }}>Next Due</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', fontSize: '1.2rem' }}>Actions</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {getSortedExpenses(getFilteredExpenses(state.expenses, expenseFilter), monthlyBillsSort).map((expense) => (
+                        <TableRow key={expense.id}>
+                          <TableCell sx={{ fontSize: '1.1rem' }}>{expense.category}</TableCell>
+                          <TableCell sx={{ fontSize: '1.1rem' }}>{expense.description}</TableCell>
+                          <TableCell sx={{ fontSize: '1.1rem' }}>
+                            {expense.amount.toLocaleString('de-CH', { style: 'currency', currency: 'CHF' })}
+                          </TableCell>
+                          <TableCell sx={{ fontSize: '1.1rem' }}>{expense.recurrence}</TableCell>
+                          <TableCell sx={{ fontSize: '1.1rem' }}>
+                            {calculateMonthlyEquivalent(expense).toLocaleString('de-CH', { style: 'currency', currency: 'CHF' })}
+                          </TableCell>
+                          <TableCell sx={{ fontSize: '1.1rem' }}>{getNextDueDate(expense)}</TableCell>
+                          <TableCell>
+                            <IconButton
+                              onClick={() => {
+                                let expenseToEdit = { ...expense };
+                                if (expense.recurrence === 'One-off' && !expense.oneOffDate && expense.paymentSchedule) {
+                                  const [day, month] = expense.paymentSchedule.split('.');
+                                  const today = new Date();
+                                  let year = today.getFullYear();
+                                  const dateString = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                                  let testDate = new Date(dateString + 'T00:00:00.000Z');
+                                  if (testDate < today) {
+                                    year = year + 1;
+                                  }
+                                  expenseToEdit.oneOffDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                                }
+                                setEditingExpense(expenseToEdit);
+                                setNewExpense(expenseToEdit);
+                                setErrors({});
+                                setOpenDialog(true);
+                              }}
+                            >
+                              <EditIcon />
+                            </IconButton>
+                            <IconButton onClick={() => handleDeleteExpense(expense.id)}>
+                              <DeleteIcon />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </Paper>
+          </Grid>
+        </Grid>
+      )}
+
+      {/* Output Tab Content */}
+      {mainTab === 1 && (
+        <Grid container spacing={3}>
+          {/* Instructions Section */}
+          <Grid item xs={12}>
+            <Paper sx={{ p: 3, bgcolor: 'success.light', color: 'success.contrastText' }}>
+              <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, fontSize: '1.8rem' }}>
+                📊 View Your Financial Results
+              </Typography>
+              <Typography variant="body1" sx={{ fontSize: '1.2rem', mb: 2 }}>
+                This tab shows your calculated financial projections, charts, and detailed breakdowns. 
+                Use the tabs below to explore different views of your financial plan.
+              </Typography>
+              <Typography variant="body2" sx={{ fontSize: '1.1rem', fontStyle: 'italic' }}>
+                💡 Tip: Switch back to the "Input Data" tab to modify your financial information and see updated results.
+              </Typography>
+            </Paper>
+          </Grid>
+
+          {/* Results Tabs Section */}
         <Grid item xs={12}>
           <Paper sx={{ p: 0 }}>
             <Tabs 
@@ -1062,7 +1464,6 @@ const SavingsPlanner = ({ themeMode, toggleTheme }) => {
             )}
           </Paper>
         </Grid>
-
 
         {/* Collapsible Monthly Calculation Table */}
         {monthlyCalculation.length > 0 && (
@@ -1356,11 +1757,11 @@ const SavingsPlanner = ({ themeMode, toggleTheme }) => {
           </Paper>
         </Grid>
 
-        {/* Expenses Table Section */}
+          {/* Detailed Expenses Table Section */}
         <Grid item xs={12}>
           <Paper sx={{ p: 3 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-              <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 3, fontSize: { xs: '2rem', sm: '4rem', md: '5rem' } }}>All Expenses</Typography>
+                <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 3, fontSize: { xs: '2rem', sm: '4rem', md: '5rem' } }}>Detailed Expenses View</Typography>
               <Grid container spacing={2} alignItems="center">
                 <Grid item xs={12} md={6}>
                   <FormControl sx={{ minWidth: 200 }}>
@@ -1385,16 +1786,15 @@ const SavingsPlanner = ({ themeMode, toggleTheme }) => {
                     onChange={handleFileUpload}
                   />
                   <Button
-                    variant="contained"
+                      variant="outlined"
                     startIcon={<UploadIcon />}
                     onClick={() => fileInputRef.current.click()}
                   >
                     Import CSV
                   </Button>
                   <Button
-                    variant="contained"
+                      variant="outlined"
                     onClick={handleExportCSV}
-                    sx={{ ml: 1 }}
                   >
                     Export CSV
                   </Button>
@@ -1406,7 +1806,6 @@ const SavingsPlanner = ({ themeMode, toggleTheme }) => {
                       setErrors({});
                       setOpenDialog(true);
                     }}
-                    sx={{ fontSize: '1rem' }}
                   >
                     Add Expense
                   </Button>
@@ -1522,7 +1921,7 @@ const SavingsPlanner = ({ themeMode, toggleTheme }) => {
         <Grid item xs={12}>
           <Paper sx={{ p: 3 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-              <Typography variant="h5" sx={{ fontWeight: 'bold', fontSize: { xs: '2rem', sm: '4rem', md: '5rem' } }}>Income</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 'bold', fontSize: { xs: '2rem', sm: '4rem', md: '5rem' } }}>Income Overview</Typography>
               <Grid container spacing={2} alignItems="center">
                 <Grid item xs={12} md={6}>
                 </Grid>
@@ -1535,16 +1934,15 @@ const SavingsPlanner = ({ themeMode, toggleTheme }) => {
                     onChange={handleIncomeFileUpload}
                   />
                   <Button
-                    variant="contained"
+                      variant="outlined"
                     startIcon={<UploadIcon />}
                     onClick={() => incomeFileInputRef.current.click()}
                   >
                     Import CSV
                   </Button>
                   <Button
-                    variant="contained"
+                      variant="outlined"
                     onClick={handleExportIncomeCSV}
-                    sx={{ ml: 1 }}
                   >
                     Export CSV
                   </Button>
@@ -1630,33 +2028,38 @@ const SavingsPlanner = ({ themeMode, toggleTheme }) => {
                     
                     <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2, mt: 3 }}>Core Calculations</Typography>
                     <Typography paragraph>
-                      <strong>Baseline + Integrated One-Off Calculation Model:</strong> The app uses an advanced calculation method that considers all future expenses from day one:
+                      <strong>Dynamic Forward-Looking Calculation:</strong> The app uses a sophisticated dynamic calculation method that analyzes the entire planning period (up to 5 years) and determines the optimal monthly savings required to maintain the target balance throughout all months:
                     </Typography>
                     <ul style={{ marginLeft: '20px', marginBottom: '20px' }}>
                       <li>
                         <Typography>
-                          <strong>Baseline Monthly Savings:</strong> A constant amount calculated to cover recurring expenses from now until the end of the planning horizon (2030).
+                          <strong>Comprehensive Analysis:</strong> The system analyzes the entire planning period (up to 5 years) and simulates different monthly savings amounts to find the minimum that ensures the balance never falls below the target level.
                         </Typography>
                       </li>
                       <li>
                         <Typography>
-                          <strong>One-Off Payment Integration:</strong> All future one-off payments are considered immediately, with their required savings spread evenly from today until each payment's deadline.
+                          <strong>Dynamic Testing:</strong> The algorithm tests monthly savings amounts from 1,000 CHF to 20,000 CHF in 100 CHF increments to find the optimal amount that maintains financial stability throughout the entire period.
                         </Typography>
                       </li>
                       <li>
                         <Typography>
-                          <strong>Combined Monthly Savings:</strong> The total monthly savings is the sum of baseline savings plus all one-off contributions, providing a single amount that covers both recurring needs and gradual buildup for all known one-off payments.
+                          <strong>Balance Guarantee:</strong> The calculated monthly savings ensures that the account balance never falls below the target level, even when multiple large expenses occur in sequence.
                         </Typography>
                       </li>
                       <li>
                         <Typography>
-                          <strong>Stepwise Adjustment:</strong> After each one-off payment is made, that portion of the savings requirement is removed and the monthly savings amount is recalculated. After the last one-off payment, monthly savings revert to just the baseline level.
+                          <strong>Expense Integration:</strong> All regular expenses (annual, irregular) and one-off expenses are considered in the calculation, ensuring comprehensive financial planning.
+                        </Typography>
+                      </li>
+                      <li>
+                        <Typography>
+                          <strong>Optimal Efficiency:</strong> The system finds the minimum monthly savings required, avoiding over-saving while ensuring financial security.
                         </Typography>
                       </li>
                     </ul>
 
                     <Typography paragraph>
-                      <strong>Key Advantage:</strong> This approach ensures you're always prepared for upcoming expenses while maintaining optimal savings efficiency. Unlike traditional methods that handle one-off expenses reactively, this system integrates them into your monthly savings plan from the very beginning.
+                      <strong>Key Advantage:</strong> This dynamic approach guarantees that your account balance never falls below the target level, even when facing multiple large expenses over an extended period. Unlike reactive methods that try to fix problems after they occur, this system prevents problems from happening in the first place by calculating the optimal monthly savings upfront.
                     </Typography>
 
                     <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2, mt: 3 }}>Monthly Expense Handling</Typography>
@@ -1741,6 +2144,196 @@ const SavingsPlanner = ({ themeMode, toggleTheme }) => {
                     </Typography>
 
                     <Typography paragraph>
+                      <strong>Example 2: 2-Year Cycle Recovery</strong>
+                    </Typography>
+                    <Typography paragraph sx={{ ml: 3 }}>
+                      Consider a 5,000 CHF one-off expense due in 12 months. With the 2-year cycle recovery system:
+                    </Typography>
+                    <ul style={{ marginLeft: '40px', marginBottom: '20px' }}>
+                      <li>
+                        <Typography>
+                          Initial calculation: 5,000 CHF ÷ (12 + 24) months = 139 CHF/month
+                        </Typography>
+                      </li>
+                      <li>
+                        <Typography>
+                          After 12 months: Payment of 5,000 CHF is made, balance drops
+                        </Typography>
+                      </li>
+                      <li>
+                        <Typography>
+                          Recovery period: Next 24 months dedicated to recovering to target balance
+                        </Typography>
+                      </li>
+                      <li>
+                        <Typography>
+                          <strong>Result:</strong> Balance returns close to target within 2 years of the payment
+                        </Typography>
+                      </li>
+                    </ul>
+
+                    <Typography paragraph>
+                      <strong>Example 3: Emergency Protection</strong>
+                    </Typography>
+                    <Typography paragraph sx={{ ml: 3 }}>
+                      Consider a scenario where a large unexpected expense occurs:
+                    </Typography>
+                    <ul style={{ marginLeft: '40px', marginBottom: '20px' }}>
+                      <li>
+                        <Typography>
+                          Current balance: 20,000 CHF, Target balance: 15,000 CHF
+                        </Typography>
+                      </li>
+                      <li>
+                        <Typography>
+                          Large expense: 30,000 CHF (e.g., emergency home repair)
+                        </Typography>
+                      </li>
+                      <li>
+                        <Typography>
+                          Without protection: Balance would drop to -10,000 CHF
+                        </Typography>
+                      </li>
+                      <li>
+                        <Typography>
+                          With emergency protection: System detects risk and increases monthly savings to recover within 12 months
+                        </Typography>
+                      </li>
+                      <li>
+                        <Typography>
+                          <strong>Result:</strong> Balance is protected and recovers to target level
+                        </Typography>
+                      </li>
+                    </ul>
+
+                    <Typography paragraph>
+                      <strong>Example 4: Proactive Protection</strong>
+                    </Typography>
+                    <Typography paragraph sx={{ ml: 3 }}>
+                      Consider a scenario where a large scheduled expense is approaching:
+                    </Typography>
+                    <ul style={{ marginLeft: '40px', marginBottom: '20px' }}>
+                      <li>
+                        <Typography>
+                          Current balance: 23,200 CHF, Target balance: 15,000 CHF
+                        </Typography>
+                      </li>
+                      <li>
+                        <Typography>
+                          Large scheduled expense: 29,920 CHF (e.g., driveway construction)
+                        </Typography>
+                      </li>
+                      <li>
+                        <Typography>
+                          Buffer remaining: 8,200 CHF (23,200 - 15,000)
+                        </Typography>
+                      </li>
+                      <li>
+                        <Typography>
+                          Proactive detection: System detects expense > 30% of buffer (29,920 > 2,460)
+                        </Typography>
+                      </li>
+                      <li>
+                        <Typography>
+                          Proactive protection: System increases monthly savings to prevent balance from going below target
+                        </Typography>
+                      </li>
+                      <li>
+                        <Typography>
+                          <strong>Result:</strong> Balance stays above target even after large expense
+                        </Typography>
+                      </li>
+                    </ul>
+
+                    <Typography paragraph>
+                      <strong>Example 5: Safety Buffer Protection</strong>
+                    </Typography>
+                    <Typography paragraph sx={{ ml: 3 }}>
+                      Consider a scenario where the balance is getting too close to the target:
+                    </Typography>
+                    <ul style={{ marginLeft: '40px', marginBottom: '20px' }}>
+                      <li>
+                        <Typography>
+                          Current balance: 17,500 CHF, Target balance: 15,000 CHF
+                        </Typography>
+                      </li>
+                      <li>
+                        <Typography>
+                          Safety buffer: 3,000 CHF (20% of target)
+                        </Typography>
+                      </li>
+                      <li>
+                        <Typography>
+                          Safety threshold: 18,000 CHF (target + safety buffer)
+                        </Typography>
+                      </li>
+                      <li>
+                        <Typography>
+                          Safety detection: Current balance (17,500) &lt; Safety threshold (18,000)
+                        </Typography>
+                      </li>
+                      <li>
+                        <Typography>
+                          Safety protection: System increases monthly savings to restore safety buffer within 3 months
+                        </Typography>
+                      </li>
+                      <li>
+                        <Typography>
+                          <strong>Result:</strong> Balance is maintained well above target level for long-term stability
+                        </Typography>
+                      </li>
+                    </ul>
+
+                    <Typography paragraph>
+                      <strong>Example 6: Minimum Balance Guarantee</strong>
+                    </Typography>
+                    <Typography paragraph sx={{ ml: 3 }}>
+                      Consider a scenario where a large expense would cause the projected balance to be too low:
+                    </Typography>
+                    <ul style={{ marginLeft: '40px', marginBottom: '20px' }}>
+                      <li>
+                        <Typography>
+                          Current balance: 20,000 CHF, Target balance: 15,000 CHF
+                        </Typography>
+                      </li>
+                      <li>
+                        <Typography>
+                          Large expense: 25,000 CHF (e.g., major home renovation)
+                        </Typography>
+                      </li>
+                      <li>
+                        <Typography>
+                          Current monthly savings: 5,000 CHF
+                        </Typography>
+                      </li>
+                      <li>
+                        <Typography>
+                          Projected balance after expense: 0 CHF (20,000 + 5,000 - 25,000)
+                        </Typography>
+                      </li>
+                      <li>
+                        <Typography>
+                          Minimum safe balance: 22,500 CHF (target + 50%)
+                        </Typography>
+                      </li>
+                      <li>
+                        <Typography>
+                          Guarantee detection: Projected balance (0) &lt; Minimum safe balance (22,500)
+                        </Typography>
+                      </li>
+                      <li>
+                        <Typography>
+                          Guarantee protection: System increases monthly savings to ensure balance stays above minimum safe level
+                        </Typography>
+                      </li>
+                      <li>
+                        <Typography>
+                          <strong>Result:</strong> Balance never falls below the minimum safe level, preventing future negative balances
+                        </Typography>
+                      </li>
+                    </ul>
+
+                    <Typography paragraph>
                       <strong>Example 2: Car Insurance Calculation</strong>
                     </Typography>
                     <Typography paragraph sx={{ ml: 3 }}>
@@ -1817,6 +2410,31 @@ const SavingsPlanner = ({ themeMode, toggleTheme }) => {
                       <li>
                         <Typography>
                           <strong>Secondary Requirement:</strong> Monthly savings amounts remain constant throughout standard payment cycles, changing only after one-off payments to rebalance your budget.
+                        </Typography>
+                      </li>
+                      <li>
+                        <Typography>
+                          <strong>2-Year Cycle Recovery:</strong> After each one-off payment, the balance must return close to the target balance within 24 months to ensure long-term financial stability and prevent cumulative balance depletion.
+                        </Typography>
+                      </li>
+                      <li>
+                        <Typography>
+                          <strong>Emergency Protection:</strong> The system continuously monitors the balance and automatically increases monthly savings when the balance is at risk of falling below the target level, ensuring the account never goes below the minimum balance.
+                        </Typography>
+                      </li>
+                      <li>
+                        <Typography>
+                          <strong>Proactive Protection:</strong> The system detects large expenses before they occur and proactively increases monthly savings to prevent the balance from going below the target level, even when large one-off payments are scheduled.
+                        </Typography>
+                      </li>
+                      <li>
+                        <Typography>
+                          <strong>Safety Buffer Protection:</strong> The system maintains a 20% safety buffer above the target balance and automatically increases monthly savings when the balance gets too close to the target level, ensuring long-term financial stability.
+                        </Typography>
+                      </li>
+                      <li>
+                        <Typography>
+                          <strong>Minimum Balance Guarantee:</strong> The system ensures the projected balance never falls below 50% above the target level by proactively adjusting monthly savings when large expenses would cause the balance to get too low.
                         </Typography>
                       </li>
                       <li>
@@ -1921,6 +2539,8 @@ const SavingsPlanner = ({ themeMode, toggleTheme }) => {
             </Paper>
           </Grid>
         </Grid>
+        </Grid>
+      )}
 
         {/* Add/Edit Expense Dialog */}
         <Dialog 
@@ -2290,7 +2910,6 @@ const SavingsPlanner = ({ themeMode, toggleTheme }) => {
             padding: 8px !important;
           }
         `}</style>
-      </Grid>
     </Container>
   );
 };
