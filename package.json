@@ -29,6 +29,7 @@
     "clean": "rimraf node_modules/.cache build",
     "predev": "npm run clean",
     "dev": "cross-env PORT=3000 HOST=localhost BROWSER=none WATCHPACK_POLLING=true react-scripts start",
+    "dev:refreshed": "cross-env REACT_APP_UI=refreshed PORT=3000 HOST=localhost BROWSER=none WATCHPACK_POLLING=true react-scripts start",
     "start": "npm run dev",
     "build": "react-scripts build",
     "build:analyze": "npm run build && npx source-map-explorer 'build/static/js/*.js'",
