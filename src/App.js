@@ -2,7 +2,6 @@ import React, { useState, useMemo } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material';
 import CssBaseline from '@mui/material/CssBaseline';
 import SavingsPlanner from './pages/SavingsPlanner';
-import { FinancialProvider } from './context/FinancialContext';
 
 const App = () => {
   const [mode, setMode] = useState('light');
@@ -227,11 +226,9 @@ const App = () => {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <FinancialProvider>
-        <div className="App">
-          <SavingsPlanner themeMode={mode} toggleTheme={toggleMode} />
-        </div>
-      </FinancialProvider>
+      <div className="App">
+        <SavingsPlanner themeMode={mode} toggleTheme={toggleMode} />
+      </div>
     </ThemeProvider>
   );
 };
