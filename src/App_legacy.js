@@ -20,20 +20,97 @@ ChartJS.register(
   ChartDataLabels
 );
 
+// Helpers to normalize date formats for one-off expenses
+const toDateInputValue = (value) => {
+  if (!value) return '';
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return value;
+  }
+  const parseDate = (val) => {
+    const date = new Date(val);
+    return isNaN(date.getTime()) ? null : date;
+  };
+
+  let dateObj = parseDate(value);
+
+  if (!dateObj && typeof value === 'string' && value.includes('.')) {
+    const parts = value.split('.');
+    if (parts.length >= 2) {
+      const day = parseInt(parts[0], 10) || 1;
+      const month = (parseInt(parts[1], 10) || 1) - 1;
+      const year = parts.length >= 3 ? parseInt(parts[2], 10) : new Date().getFullYear();
+      const fallback = new Date(year, month, day);
+      if (!isNaN(fallback.getTime())) {
+        dateObj = fallback;
+      }
+    }
+  }
+
+  return dateObj ? dateObj.toISOString().slice(0, 10) : '';
+};
+
+const formatScheduleFromDate = (value) => {
+  if (!value) return '';
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split('-');
+    return `${day}.${month}.${year}`;
+  }
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return '';
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}.${month}.${year}`;
+};
+
 // Dialog component for editing expenses
 const EditDialog = ({ isOpen, onClose, expense, onSave }) => {
   const [editedExpense, setEditedExpense] = useState({ ...expense });
   
   useEffect(() => {
-    setEditedExpense({ ...expense });
+    const normalized = { ...(expense || {}) };
+    if (normalized.recurrence === 'One-off') {
+      const normalizedDate = toDateInputValue(normalized.oneOffDate || normalized.paymentSchedule);
+      normalized.oneOffDate = normalizedDate;
+      normalized.paymentSchedule = normalizedDate ? formatScheduleFromDate(normalizedDate) : normalized.paymentSchedule || '';
+    }
+    setEditedExpense(normalized);
   }, [expense]);
   
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setEditedExpense({
-      ...editedExpense,
+
+    if (name === 'oneOffDate') {
+      setEditedExpense(prev => ({
+        ...prev,
+        oneOffDate: value,
+        paymentSchedule: formatScheduleFromDate(value)
+      }));
+      return;
+    }
+
+    if (name === 'recurrence') {
+      if (value === 'One-off') {
+        setEditedExpense(prev => ({
+          ...prev,
+          recurrence: value,
+          oneOffDate: '',
+          paymentSchedule: '',
+          endDate: ''
+        }));
+      } else {
+        setEditedExpense(prev => ({
+          ...prev,
+          recurrence: value
+        }));
+      }
+      return;
+    }
+
+    setEditedExpense(prev => ({
+      ...prev,
       [name]: value
-    });
+    }));
   };
   
   const handleSubmit = (e) => {
@@ -86,31 +163,45 @@ const EditDialog = ({ isOpen, onClose, expense, onSave }) => {
             </select>
           </div>
           
-          <div className="dialog-field">
-            <label>Payment Schedule:</label>
-            <input 
-              type="text" 
-              name="paymentSchedule" 
-              value={editedExpense.paymentSchedule || ''} 
-              onChange={handleChange}
-              placeholder={
-                editedExpense.recurrence === 'Annual' ? 'DD.MM' : 
-                editedExpense.recurrence === 'One-off' ? 'DD.MM.YYYY' : 
-                'DD.MM;DD.MM;...'
-              }
-            />
-          </div>
+          {editedExpense.recurrence === 'One-off' ? (
+            <div className="dialog-field">
+              <label>Payment Date:</label>
+              <input 
+                type="date" 
+                name="oneOffDate" 
+                value={toDateInputValue(editedExpense.oneOffDate || editedExpense.paymentSchedule)}
+                onChange={handleChange}
+                required
+              />
+            </div>
+          ) : (
+            <div className="dialog-field">
+              <label>Payment Schedule:</label>
+              <input 
+                type="text" 
+                name="paymentSchedule" 
+                value={editedExpense.paymentSchedule || ''} 
+                onChange={handleChange}
+                placeholder={
+                  editedExpense.recurrence === 'Annual' ? 'DD.MM' : 
+                  'DD.MM;DD.MM;...'
+                }
+              />
+            </div>
+          )}
           
-          <div className="dialog-field">
-            <label>End Date:</label>
-            <input 
-              type="text" 
-              name="endDate" 
-              value={editedExpense.endDate || ''} 
-              onChange={handleChange}
-              placeholder="DD/MM/YYYY"
-            />
-          </div>
+          {editedExpense.recurrence !== 'One-off' && (
+            <div className="dialog-field">
+              <label>End Date:</label>
+              <input 
+                type="text" 
+                name="endDate" 
+                value={editedExpense.endDate || ''} 
+                onChange={handleChange}
+                placeholder="DD/MM/YYYY"
+              />
+            </div>
+          )}
           
           <div className="dialog-buttons">
             <button type="button" onClick={onClose}>Cancel</button>
@@ -203,7 +294,8 @@ function App() {
     description: '',
     amount: '',
     recurrence: 'Annual',
-    paymentSchedule: ''
+    paymentSchedule: '',
+    oneOffDate: ''
   });
 
   useEffect(() => {
@@ -303,9 +395,15 @@ function App() {
   const handleAddExpense = () => {
     if (!newExpense.description || !newExpense.amount) return;
     
+    const expenseToAdd = { ...newExpense };
+    if (expenseToAdd.recurrence === 'One-off') {
+      expenseToAdd.paymentSchedule = formatScheduleFromDate(expenseToAdd.oneOffDate);
+      if (!expenseToAdd.paymentSchedule) return;
+    }
+
     const updatedExpenses = [...expenses, {
-      ...newExpense,
-      amount: parseFloat(newExpense.amount).toFixed(2)
+      ...expenseToAdd,
+      amount: parseFloat(expenseToAdd.amount).toFixed(2)
     }];
     
     setExpenses(updatedExpenses);
@@ -315,7 +413,8 @@ function App() {
       description: '',
       amount: '',
       recurrence: 'Annual',
-      paymentSchedule: ''
+      paymentSchedule: '',
+      oneOffDate: ''
     });
   };
   
@@ -327,10 +426,29 @@ function App() {
   
   const handleExpenseChange = (e) => {
     const { name, value } = e.target;
-    setNewExpense({
-      ...newExpense,
+
+    if (name === 'oneOffDate') {
+      setNewExpense(prev => ({
+        ...prev,
+        oneOffDate: value,
+        paymentSchedule: formatScheduleFromDate(value)
+      }));
+      return;
+    }
+
+    if (name === 'recurrence') {
+      setNewExpense(prev => ({
+        ...prev,
+        recurrence: value,
+        ...(value === 'One-off' ? { oneOffDate: '', paymentSchedule: '' } : {})
+      }));
+      return;
+    }
+
+    setNewExpense(prev => ({
+      ...prev,
       [name]: value
-    });
+    }));
   };
   
   // Edit expense handlers
@@ -348,10 +466,15 @@ function App() {
   
   const handleSaveEditedExpense = (editedExpense) => {
     if (editingExpenseIndex >= 0) {
+      const expenseToSave = { ...editedExpense };
+      if (expenseToSave.recurrence === 'One-off') {
+        expenseToSave.paymentSchedule = formatScheduleFromDate(expenseToSave.oneOffDate);
+        if (!expenseToSave.paymentSchedule) return;
+      }
       const updatedExpenses = [...expenses];
       updatedExpenses[editingExpenseIndex] = {
-        ...editedExpense,
-        amount: parseFloat(editedExpense.amount).toFixed(2)
+        ...expenseToSave,
+        amount: parseFloat(expenseToSave.amount).toFixed(2)
       };
       setExpenses(updatedExpenses);
     }
@@ -784,17 +907,26 @@ function App() {
                   <option value="Irregular">Irregular</option>
                   <option value="One-off">One-off</option>
                 </select>
-                <input
-                  type="text"
-                  name="paymentSchedule"
-                  placeholder={
-                    newExpense.recurrence === 'Annual' ? 'DD.MM' : 
-                    newExpense.recurrence === 'One-off' ? 'DD.MM.YYYY' : 
-                    'DD.MM;DD.MM;...'
-                  }
-                  value={newExpense.paymentSchedule}
-                  onChange={handleExpenseChange}
-                />
+                {newExpense.recurrence === 'One-off' ? (
+                  <input
+                    type="date"
+                    name="oneOffDate"
+                    placeholder="Payment Date"
+                    value={newExpense.oneOffDate || ''}
+                    onChange={handleExpenseChange}
+                  />
+                ) : (
+                  <input
+                    type="text"
+                    name="paymentSchedule"
+                    placeholder={
+                      newExpense.recurrence === 'Annual' ? 'DD.MM' : 
+                      'DD.MM;DD.MM;...'
+                    }
+                    value={newExpense.paymentSchedule}
+                    onChange={handleExpenseChange}
+                  />
+                )}
                 <button onClick={handleAddExpense}>Add</button>
               </div>
             </div>

@@ -1,10 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material';
 import CssBaseline from '@mui/material/CssBaseline';
+import Legacy from './App_legacy';
 import SavingsPlanner from './pages/SavingsPlanner';
 
 const App = () => {
   const [mode, setMode] = useState('light');
+  const ui = process.env.REACT_APP_UI || 'legacy';
 
   const toggleMode = () => {
     setMode((prevMode) => (prevMode === 'light' ? 'dark' : 'light'));
@@ -223,6 +225,10 @@ const App = () => {
     [mode]
   );
 
+  if (ui !== 'refreshed') {
+    return <Legacy />;
+  }
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -234,11 +240,3 @@ const App = () => {
 };
 
 export default App;
-import Legacy from './App_legacy';
-import SavingsPlanner from './pages/SavingsPlanner';
-
-const ui = process.env.REACT_APP_UI || 'legacy';
-
-export default function App() {
-  return ui === 'refreshed' ? <SavingsPlanner /> : <Legacy />;
-}
