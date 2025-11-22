@@ -219,6 +219,7 @@ function App() {
   const [monthlySavings, setMonthlySavings] = useState(0);
   const [csvFile, setCsvFile] = useState(null);
   const fileInputRef = useRef(null);
+  const [themeMode, setThemeMode] = useState('light');
   
   // State for edit dialog
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -450,6 +451,10 @@ function App() {
       [name]: value
     }));
   };
+
+  const toggleTheme = () => {
+    setThemeMode(prev => prev === 'light' ? 'dark' : 'light');
+  };
   
   // Edit expense handlers
   const handleOpenEditDialog = (expense, index) => {
@@ -616,9 +621,14 @@ function App() {
   };
 
   return (
-        <div className="App">
+        <div className={`App ${themeMode === 'dark' ? 'dark-mode' : ''}`}>
       <header className="App-header">
-        <h1>Buffer saving account calculation details</h1>
+        <div className="header-row">
+          <h1>Buffer saving account calculation details</h1>
+          <button className="toggle-theme" onClick={toggleTheme}>
+            {themeMode === 'light' ? 'Dark mode' : 'Light mode'}
+          </button>
+        </div>
         <p className="note">
           <strong>Note:</strong> Monthly savings amounts may vary to accommodate one-off expenses while keeping your buffer account above the minimum level.
         </p>
